@@ -1,0 +1,37 @@
+<Application x:Class="Azure.PIM.Tray.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             ShutdownMode="OnExplicitShutdown">
+    <Application.Resources>
+        <Style x:Key="DetailLabel" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#666666"/>
+            <Setter Property="FontSize"   Value="11"/>
+            <Setter Property="Margin"     Value="0,1"/>
+        </Style>
+        <Style x:Key="DetailValue" TargetType="TextBlock">
+            <Setter Property="FontSize"  Value="12"/>
+            <Setter Property="Margin"    Value="0,1"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+        </Style>
+        <Style x:Key="HeaderPanel" TargetType="Border">
+            <Setter Property="Background"       Value="#F0F4FF"/>
+            <Setter Property="BorderBrush"      Value="#C0CCEE"/>
+            <Setter Property="BorderThickness"  Value="1"/>
+            <Setter Property="CornerRadius"     Value="4"/>
+            <Setter Property="Padding"          Value="10"/>
+            <Setter Property="Margin"           Value="0,0,0,10"/>
+        </Style>
+        <Style x:Key="PrimaryButton" TargetType="Button">
+            <Setter Property="Background"   Value="#0066CC"/>
+            <Setter Property="Foreground"   Value="White"/>
+            <Setter Property="Padding"      Value="16,6"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="FontWeight"   Value="SemiBold"/>
+            <Setter Property="Cursor"       Value="Hand"/>
+        </Style>
+        <Style x:Key="CancelButton" TargetType="Button">
+            <Setter Property="Padding"  Value="16,6"/>
+            <Setter Property="Cursor"   Value="Hand"/>
+        </Style>
+    </Application.Resources>
+</Application>

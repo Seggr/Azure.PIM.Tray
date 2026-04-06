@@ -1,0 +1,74 @@
+<Window x:Class="Azure.PIM.Tray.Windows.ApprovalWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Approve PIM Request"
+        Width="480" SizeToContent="Height"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterScreen"
+        ShowInTaskbar="True">
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" Style="{StaticResource HeaderPanel}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="110"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="Requested by"  Style="{StaticResource DetailLabel}"/>
+                <TextBlock Grid.Row="0" Grid.Column="1" x:Name="TxtPrincipal" Style="{StaticResource DetailValue}" FontWeight="SemiBold"/>
+
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="Role"    Style="{StaticResource DetailLabel}"/>
+                <TextBlock Grid.Row="1" Grid.Column="1" x:Name="TxtRole" Style="{StaticResource DetailValue}"/>
+
+                <TextBlock Grid.Row="2" Grid.Column="0" Text="Type"    Style="{StaticResource DetailLabel}"/>
+                <TextBlock Grid.Row="2" Grid.Column="1" x:Name="TxtType" Style="{StaticResource DetailValue}"/>
+
+                <TextBlock Grid.Row="3" Grid.Column="0" Text="Scope"   Style="{StaticResource DetailLabel}"/>
+                <TextBlock Grid.Row="3" Grid.Column="1" x:Name="TxtScope" Style="{StaticResource DetailValue}"/>
+
+                <TextBlock Grid.Row="4" Grid.Column="0" Text="Requested" Style="{StaticResource DetailLabel}"/>
+                <TextBlock Grid.Row="4" Grid.Column="1" x:Name="TxtCreated" Style="{StaticResource DetailValue}"/>
+
+                <TextBlock Grid.Row="5" Grid.Column="0" Text="Reason"  Style="{StaticResource DetailLabel}"/>
+                <TextBlock Grid.Row="5" Grid.Column="1" x:Name="TxtReason" Style="{StaticResource DetailValue}"
+                           Foreground="#444" FontStyle="Italic"/>
+            </Grid>
+        </Border>
+
+        <TextBlock Grid.Row="1" Text="Approval justification:" FontWeight="SemiBold" Margin="0,0,0,4"/>
+        <TextBox   Grid.Row="2" x:Name="TxtJustification"
+                   Height="60" TextWrapping="Wrap" AcceptsReturn="True"
+                   VerticalScrollBarVisibility="Auto"
+                   Margin="0,0,0,14"
+                   VerticalContentAlignment="Top"
+                   Padding="4"/>
+
+        <TextBlock Grid.Row="3" x:Name="TxtError"
+                   Foreground="Red" TextWrapping="Wrap"
+                   Visibility="Collapsed" Margin="0,0,0,8"/>
+
+        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="Cancel"  Style="{StaticResource CancelButton}"
+                    Margin="0,0,8,0"  Click="Cancel_Click"/>
+            <Button x:Name="BtnApprove" Content="Approve"
+                    Style="{StaticResource PrimaryButton}"
+                    Click="Approve_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>
