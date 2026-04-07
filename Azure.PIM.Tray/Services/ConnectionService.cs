@@ -31,7 +31,8 @@ internal static class ConnectionService
     [
         "User.Read",
         "RoleAssignmentSchedule.ReadWrite.Directory",
-        "RoleEligibilitySchedule.Read.Directory"
+        "RoleEligibilitySchedule.Read.Directory",
+        "PrivilegedAccess.ReadWrite.AzureAD"
     ];
 
     // ------------------------------------------------------------------
