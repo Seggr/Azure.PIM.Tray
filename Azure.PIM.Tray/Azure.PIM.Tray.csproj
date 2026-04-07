@@ -9,7 +9,7 @@
     <UseWindowsForms>true</UseWindowsForms>
     <AssemblyName>Azure.PIM.Tray</AssemblyName>
     <RootNamespace>Azure.PIM.Tray</RootNamespace>
-    <Version>1.0.0</Version>
+    <Version>1.0.1</Version>
     <ApplicationIcon>Assets\tray.ico</ApplicationIcon>
   </PropertyGroup>
 
