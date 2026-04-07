@@ -268,6 +268,35 @@ internal sealed class GraphPimDataService : IAsyncDisposable
     }
 
     // ------------------------------------------------------------------
+    // Policy check — is approval required?
+    // ------------------------------------------------------------------
+
+    public async Task<bool?> CheckApprovalRequiredAsync(string roleDefId, CancellationToken ct)
+    {
+        try
+        {
+            var token  = await GetGraphTokenAsync(ct);
+            var filter = Uri.EscapeDataString(
+                $"scopeId eq '/' and scopeType eq 'DirectoryRole' and roleDefinitionId eq '{roleDefId}'");
+            var assignmentUrl = $"{GraphBase}/policies/roleManagementPolicyAssignments" +
+                                $"?$filter={filter}&$select=policyId";
+
+            var assignResp = await GraphGetAsync<ODataCollection<PolicyAssignment>>(token, assignmentUrl, ct);
+            var policyId   = assignResp?.Value?.FirstOrDefault()?.PolicyId;
+            if (policyId is null) return null;
+
+            var ruleUrl  = $"{GraphBase}/policies/roleManagementPolicies/{policyId}/rules/Approval_EndUser_Assignment";
+            var ruleResp = await GraphGetAsync<ApprovalRule>(token, ruleUrl, ct);
+            return ruleResp?.Setting?.IsApprovalRequired;
+        }
+        catch (Exception ex)
+        {
+            AppLog.Debug($"ApprovalCheck ({TenantDisplayName})", $"Failed: {ex.Message}");
+            return null;
+        }
+    }
+
+    // ------------------------------------------------------------------
     // Activation polling
     // ------------------------------------------------------------------
 
@@ -288,7 +317,7 @@ internal sealed class GraphPimDataService : IAsyncDisposable
                 var resp   = await GraphGetAsync<EntraScheduleRequestStatus>(token, pollUrl, pollCt);
                 var status = resp?.Status ?? "Unknown";
 
-                if (status is "Provisioned" or "Denied" or "Failed" or "Revoked" or "Canceled")
+                if (status is "Provisioned" or "Granted" or "Denied" or "Failed" or "Revoked" or "Canceled")
                     return status;
             }
             catch (OperationCanceledException) { break; }
@@ -429,5 +458,20 @@ internal sealed class GraphPimDataService : IAsyncDisposable
     {
         [JsonPropertyName("id")]     public string? Id     { get; init; }
         [JsonPropertyName("status")] public string? Status { get; init; }
+    }
+
+    private sealed class PolicyAssignment
+    {
+        [JsonPropertyName("policyId")] public string? PolicyId { get; init; }
+    }
+
+    private sealed class ApprovalRule
+    {
+        [JsonPropertyName("setting")] public ApprovalSetting? Setting { get; init; }
+    }
+
+    private sealed class ApprovalSetting
+    {
+        [JsonPropertyName("isApprovalRequired")] public bool? IsApprovalRequired { get; init; }
     }
 }

@@ -64,6 +64,20 @@ internal sealed class PimDataService : IAsyncDisposable
             ? _arm.PollActivationAsync(pollUrl, ct)
             : _graph.PollActivationAsync(pollUrl, ct);
 
+    public Task<bool?> CheckApprovalRequiredAsync(
+        UnifiedEligibleRole role, CancellationToken ct = default)
+    {
+        if (role.Source == PimSource.EntraId)
+        {
+            if (role.EntraRoleDefId is null) return Task.FromResult<bool?>(null);
+            return _graph.CheckApprovalRequiredAsync(role.EntraRoleDefId, ct);
+        }
+
+        if (role.ArmScope is null || role.ArmRoleDefinitionId is null)
+            return Task.FromResult<bool?>(null);
+        return _arm.CheckApprovalRequiredAsync(role.ArmScope, role.ArmRoleDefinitionId, ct);
+    }
+
     public async ValueTask DisposeAsync()
     {
         await _graph.DisposeAsync();

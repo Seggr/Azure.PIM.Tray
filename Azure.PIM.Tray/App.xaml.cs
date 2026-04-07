@@ -18,6 +18,9 @@ public partial class App : System.Windows.Application
     private ActivationWatcher?   _watcher;
     private ContextMenuBuilder?  _contextMenu;
 
+    private LogViewerWindow? _logViewerWindow;
+    private ManageWindow?    _manageWindow;
+
     protected override void OnStartup(StartupEventArgs e)
     {
         _mutex = new System.Threading.Mutex(true, "Azure.PIM.Tray", out bool isNew);
@@ -174,13 +177,22 @@ public partial class App : System.Windows.Application
     {
         Dispatcher.InvokeAsync(() =>
         {
+            if (_logViewerWindow is not null)
+            {
+                _logViewerWindow.Activate();
+                return;
+            }
+
             try
             {
                 var win = new LogViewerWindow();
+                win.Closed += (_, _) => _logViewerWindow = null;
+                _logViewerWindow = win;
                 win.Show();
             }
             catch (Exception ex)
             {
+                _logViewerWindow = null;
                 AppLog.Error("LogViewer", $"Failed to open: {ex.Message}");
             }
         });
@@ -190,6 +202,12 @@ public partial class App : System.Windows.Application
     {
         Dispatcher.InvokeAsync(() =>
         {
+            if (_manageWindow is not null)
+            {
+                _manageWindow.Activate();
+                return;
+            }
+
             var win = new ManageWindow(_config);
             win.ConfigChanged += async (_, _) =>
             {
@@ -198,6 +216,8 @@ public partial class App : System.Windows.Application
                 if (_refresher is not null)
                     _ = _refresher.RefreshAsync();
             };
+            win.Closed += (_, _) => _manageWindow = null;
+            _manageWindow = win;
             win.ShowDialog();
         });
     }

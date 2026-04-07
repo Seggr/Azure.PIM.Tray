@@ -9,6 +9,7 @@ public partial class ActivateWindow : Window
 {
     private readonly UnifiedEligibleRole _role;
     private readonly ITenantContext      _tenant;
+    private readonly CancellationTokenSource _cts = new();
 
     public string? ActivationPollUrl { get; private set; }
 
@@ -25,6 +26,42 @@ public partial class ActivateWindow : Window
         TxtScope.Text = role.ScopeDisplayName;
 
         TxtJustification.Focus();
+
+        Loaded += async (_, _) =>
+        {
+            try
+            {
+                var result = await _tenant.CheckApprovalRequiredAsync(_role, _cts.Token);
+                TxtApproval.FontStyle = FontStyles.Normal;
+                if (result == true)
+                {
+                    TxtApproval.Text       = "Required";
+                    TxtApproval.Foreground  = System.Windows.Media.Brushes.OrangeRed;
+                }
+                else if (result == false)
+                {
+                    TxtApproval.Text       = "Not required";
+                    TxtApproval.Foreground  = System.Windows.Media.Brushes.Green;
+                }
+                else
+                {
+                    SetApprovalUnknown();
+                }
+            }
+            catch (OperationCanceledException) { }
+            catch
+            {
+                SetApprovalUnknown();
+            }
+        };
+        Closed += (_, _) => { _cts.Cancel(); _cts.Dispose(); };
+    }
+
+    private void SetApprovalUnknown()
+    {
+        TxtApproval.Text      = "Unknown";
+        TxtApproval.Foreground = System.Windows.Media.Brushes.Gray;
+        TxtApproval.FontStyle  = FontStyles.Normal;
     }
 
     private void CboDuration_Changed(object sender, SelectionChangedEventArgs e)

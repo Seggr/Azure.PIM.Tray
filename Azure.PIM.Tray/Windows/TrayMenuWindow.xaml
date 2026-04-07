@@ -10,6 +10,30 @@
         <Border.Effect>
             <DropShadowEffect ShadowDepth="3" Opacity="0.3" BlurRadius="8"/>
         </Border.Effect>
-        <StackPanel x:Name="MenuPanel" MinWidth="240"/>
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <Border x:Name="ScrollUpArrow" Grid.Row="0" Visibility="Collapsed"
+                    Background="White" Padding="0,3" Cursor="Hand">
+                <TextBlock Text="&#x25B2;" FontSize="8" Foreground="#999999"
+                           HorizontalAlignment="Center"/>
+            </Border>
+
+            <ScrollViewer x:Name="MenuScroll" Grid.Row="1"
+                          VerticalScrollBarVisibility="Hidden"
+                          HorizontalScrollBarVisibility="Disabled">
+                <StackPanel x:Name="MenuPanel" MinWidth="240"/>
+            </ScrollViewer>
+
+            <Border x:Name="ScrollDownArrow" Grid.Row="2" Visibility="Collapsed"
+                    Background="White" Padding="0,3" Cursor="Hand">
+                <TextBlock Text="&#x25BC;" FontSize="8" Foreground="#999999"
+                           HorizontalAlignment="Center"/>
+            </Border>
+        </Grid>
     </Border>
 </Window>

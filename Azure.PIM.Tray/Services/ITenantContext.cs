@@ -27,4 +27,6 @@ public interface ITenantContext : IAsyncDisposable
         CancellationToken ct = default);
 
     Task<string> WatchActivationAsync(string pollUrl, PimSource source, CancellationToken ct = default);
+
+    Task<bool?> CheckApprovalRequiredAsync(UnifiedEligibleRole role, CancellationToken ct = default);
 }

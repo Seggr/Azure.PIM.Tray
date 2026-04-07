@@ -252,6 +252,10 @@ public sealed class TenantContext : ITenantContext
         string pollUrl, PimSource source, CancellationToken ct = default)
         => _svc.PollActivationAsync(pollUrl, source, ct);
 
+    public Task<bool?> CheckApprovalRequiredAsync(
+        UnifiedEligibleRole role, CancellationToken ct = default)
+        => _svc.CheckApprovalRequiredAsync(role, ct);
+
     public ValueTask DisposeAsync()
     {
         _refreshLock.Dispose();

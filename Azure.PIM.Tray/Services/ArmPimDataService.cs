@@ -228,6 +228,36 @@ internal sealed class ArmPimDataService : IAsyncDisposable
     }
 
     // ------------------------------------------------------------------
+    // Policy check — is approval required?
+    // ------------------------------------------------------------------
+
+    public async Task<bool?> CheckApprovalRequiredAsync(string scope, string roleDefId, CancellationToken ct)
+    {
+        try
+        {
+            var token  = await GetArmTokenAsync(ct);
+            var filter = Uri.EscapeDataString($"roleDefinitionId eq '{roleDefId}'");
+            var url    = $"{ArmBase}{scope}/providers/Microsoft.Authorization" +
+                         $"/roleManagementPolicyAssignments?api-version={ArmApiVersion}&$filter={filter}";
+
+            var assignResp = await ArmGetAsync<ArmCollection<ArmPolicyAssignment>>(token, url, ct);
+            var policyId   = assignResp?.Value?.FirstOrDefault()?.Properties?.PolicyId;
+            if (policyId is null) return null;
+
+            var policyUrl  = $"{ArmBase}{policyId}?api-version={ArmApiVersion}";
+            var policyResp = await ArmGetAsync<ArmPolicyResponse>(token, policyUrl, ct);
+            var approvalRule = policyResp?.Properties?.EffectiveRules?
+                .FirstOrDefault(r => string.Equals(r.Id, "Approval_EndUser_Assignment", StringComparison.OrdinalIgnoreCase));
+            return approvalRule?.Setting?.IsApprovalRequired;
+        }
+        catch (Exception ex)
+        {
+            AppLog.Debug($"ApprovalCheck ({TenantDisplayName})", $"Failed: {ex.Message}");
+            return null;
+        }
+    }
+
+    // ------------------------------------------------------------------
     // Activation polling
     // ------------------------------------------------------------------
 
@@ -248,7 +278,7 @@ internal sealed class ArmPimDataService : IAsyncDisposable
                 var resp   = await ArmGetAsync<ArmScheduleRequestStatus>(token, pollUrl, pollCt);
                 var status = resp?.Properties?.Status ?? "Unknown";
 
-                if (status is "Provisioned" or "Denied" or "Failed" or "Revoked" or "Canceled")
+                if (status is "Provisioned" or "Granted" or "Denied" or "Failed" or "Revoked" or "Canceled")
                     return status;
             }
             catch (OperationCanceledException) { break; }
@@ -383,5 +413,36 @@ internal sealed class ArmPimDataService : IAsyncDisposable
     private sealed class ArmScheduleRequestProps
     {
         [JsonPropertyName("status")] public string? Status { get; init; }
+    }
+
+    private sealed class ArmPolicyAssignment
+    {
+        [JsonPropertyName("properties")] public ArmPolicyAssignmentProps? Properties { get; init; }
+    }
+
+    private sealed class ArmPolicyAssignmentProps
+    {
+        [JsonPropertyName("policyId")] public string? PolicyId { get; init; }
+    }
+
+    private sealed class ArmPolicyResponse
+    {
+        [JsonPropertyName("properties")] public ArmPolicyProps? Properties { get; init; }
+    }
+
+    private sealed class ArmPolicyProps
+    {
+        [JsonPropertyName("effectiveRules")] public List<ArmPolicyRule>? EffectiveRules { get; init; }
+    }
+
+    private sealed class ArmPolicyRule
+    {
+        [JsonPropertyName("id")]      public string? Id      { get; init; }
+        [JsonPropertyName("setting")] public ArmApprovalSetting? Setting { get; init; }
+    }
+
+    private sealed class ArmApprovalSetting
+    {
+        [JsonPropertyName("isApprovalRequired")] public bool? IsApprovalRequired { get; init; }
     }
 }

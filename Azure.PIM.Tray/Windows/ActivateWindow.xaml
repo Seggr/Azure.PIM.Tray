@@ -27,6 +27,7 @@
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
                 <TextBlock Grid.Row="0" Grid.Column="0" Text="Role"  Style="{StaticResource DetailLabel}"/>
@@ -38,6 +39,11 @@
 
                 <TextBlock Grid.Row="2" Grid.Column="0" Text="Scope" Style="{StaticResource DetailLabel}"/>
                 <TextBlock Grid.Row="2" Grid.Column="1" x:Name="TxtScope" Style="{StaticResource DetailValue}"/>
+
+                <TextBlock Grid.Row="3" Grid.Column="0" Text="Approval" Style="{StaticResource DetailLabel}"/>
+                <TextBlock Grid.Row="3" Grid.Column="1" x:Name="TxtApproval"
+                           Style="{StaticResource DetailValue}" Text="Checking..."
+                           Foreground="Gray" FontStyle="Italic"/>
             </Grid>
         </Border>
 

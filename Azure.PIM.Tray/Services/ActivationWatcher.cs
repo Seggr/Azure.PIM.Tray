@@ -43,12 +43,13 @@ public sealed class ActivationWatcher
         {
             var status = await tenant.WatchActivationAsync(pollUrl, source, _shutdownToken);
 
-            var logLevel = status is "Provisioned" ? LogLevel.Info : LogLevel.Warning;
+            var logLevel = status is "Provisioned" or "Granted" ? LogLevel.Info : LogLevel.Warning;
             AppLog.Add(logLevel, "Activation", $"'{roleName}' [{source}]: {status}");
 
             var (icon, msg) = status switch
             {
-                "Provisioned" => (ToolTipIcon.Info,    $"\u2713 {roleName} is now active."),
+                "Provisioned" or "Granted"
+                              => (ToolTipIcon.Info,    $"\u2713 {roleName} is now active."),
                 "Denied"      => (ToolTipIcon.Warning, $"\u2717 {roleName} was denied."),
                 "Failed"      => (ToolTipIcon.Error,   $"\u2717 {roleName} activation failed."),
                 "Canceled"    => (ToolTipIcon.Warning, $"\u2717 {roleName} was canceled."),

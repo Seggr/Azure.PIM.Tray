@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Threading;
 using Brushes = System.Windows.Media.Brushes;
 using Color = System.Windows.Media.Color;
 using ColorConverter = System.Windows.Media.ColorConverter;
@@ -15,11 +16,49 @@ namespace Azure.PIM.Tray.Windows;
 public partial class TrayMenuWindow : Window
 {
     private TrayMenuWindow? _submenu;
+    private TrayMenuWindow? _parentMenu;
     private Border? _activeSubmenuItem;
+    private DispatcherTimer? _scrollTimer;
 
     public TrayMenuWindow()
     {
         InitializeComponent();
+        InitScrollArrows();
+    }
+
+    private void InitScrollArrows()
+    {
+        MenuScroll.ScrollChanged += (_, _) => UpdateScrollArrows();
+
+        ScrollUpArrow.MouseEnter += (_, _) => StartAutoScroll(-40);
+        ScrollUpArrow.MouseLeave += (_, _) => StopAutoScroll();
+        ScrollDownArrow.MouseEnter += (_, _) => StartAutoScroll(40);
+        ScrollDownArrow.MouseLeave += (_, _) => StopAutoScroll();
+    }
+
+    private void UpdateScrollArrows()
+    {
+        ScrollUpArrow.Visibility = MenuScroll.VerticalOffset > 0
+            ? Visibility.Visible : Visibility.Collapsed;
+        ScrollDownArrow.Visibility =
+            MenuScroll.VerticalOffset < MenuScroll.ScrollableHeight - 1
+                ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void StartAutoScroll(double delta)
+    {
+        StopAutoScroll();
+        _scrollTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
+        _scrollTimer.Tick += (_, _) => MenuScroll.ScrollToVerticalOffset(MenuScroll.VerticalOffset + delta);
+        _scrollTimer.Start();
+        // Scroll immediately on enter
+        MenuScroll.ScrollToVerticalOffset(MenuScroll.VerticalOffset + delta);
+    }
+
+    private void StopAutoScroll()
+    {
+        _scrollTimer?.Stop();
+        _scrollTimer = null;
     }
 
     public StackPanel Items => MenuPanel;
@@ -108,20 +147,12 @@ public partial class TrayMenuWindow : Window
         CloseSubmenu();
 
         var sub = new TrayMenuWindow();
+        sub._parentMenu = this;
         buildSubmenu(sub);
         _submenu = sub;
         _activeSubmenuItem = item;
 
         sub.WindowStartupLocation = WindowStartupLocation.Manual;
-
-        // Measure without showing
-        sub.MenuPanel.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-        var subDesired = sub.MenuPanel.DesiredSize;
-        var subW = subDesired.Width + 20;
-        var subH = subDesired.Height + 20;
-
-        var targetLeft = Left + ActualWidth - 2;
-        var targetTop  = Top + item.TranslatePoint(new Point(0, 0), this).Y;
 
         // Keep submenu on screen
         var screen = System.Windows.Forms.Screen.FromPoint(
@@ -131,6 +162,19 @@ public partial class TrayMenuWindow : Window
         var workBottom = screen.WorkingArea.Bottom / dpi.DpiScaleY;
         var workLeft   = screen.WorkingArea.Left   / dpi.DpiScaleX;
         var workTop    = screen.WorkingArea.Top    / dpi.DpiScaleY;
+        var workHeight = workBottom - workTop;
+
+        // Cap submenu height at 90% of the working area
+        sub.MenuScroll.MaxHeight = workHeight * 0.9 - 20;
+
+        // Measure without showing
+        sub.MenuPanel.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        var subDesired = sub.MenuPanel.DesiredSize;
+        var subW = subDesired.Width + 20;
+        var subH = Math.Min(subDesired.Height + 20, workHeight * 0.9);
+
+        var targetLeft = Left + ActualWidth - 2;
+        var targetTop  = Top + item.TranslatePoint(new Point(0, 0), this).Y;
 
         if (targetLeft + subW > workRight)
             targetLeft = Left - subW + 2;
@@ -172,7 +216,17 @@ public partial class TrayMenuWindow : Window
         var workTop    = screen.WorkingArea.Top    / dpi.DpiScaleY;
         var workRight  = screen.WorkingArea.Right  / dpi.DpiScaleX;
         var workBottom = screen.WorkingArea.Bottom / dpi.DpiScaleY;
+        var workHeight = workBottom - workTop;
         var cursorX    = cursor.X / dpi.DpiScaleX;
+
+        // Cap menu height at 90% of the working area (border+shadow padding excluded)
+        MenuScroll.MaxHeight = workHeight * 0.9 - 20;
+
+        // Re-measure with the constrained height
+        MenuPanel.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        desired = MenuPanel.DesiredSize;
+        estWidth  = desired.Width + 20;
+        estHeight = Math.Min(desired.Height + 20, workHeight * 0.9);
 
         Left = Math.Min(cursorX, workRight - estWidth);
         Top  = workBottom - estHeight;
@@ -207,7 +261,13 @@ public partial class TrayMenuWindow : Window
         {
             if (_submenu is { IsActive: true } or { IsMouseOver: true }) return;
             if (IsActive) return; // Re-activated before dispatch ran
-            CloseAll();
+            if (_parentMenu is { IsActive: true } or { IsMouseOver: true }) return;
+
+            // Walk up to the root menu and close the entire chain
+            var root = this;
+            while (root._parentMenu is not null)
+                root = root._parentMenu;
+            root.CloseAll();
         }, System.Windows.Threading.DispatcherPriority.Input);
     }
 }
