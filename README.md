@@ -23,26 +23,71 @@ A Windows system tray application for managing Azure Privileged Identity Managem
 ### Prerequisites
 
 - Windows 10/11
-- .NET 8.0 SDK
-- An Azure AD app registration with the following permissions:
-  - `User.Read`, `RoleAssignmentSchedule.ReadWrite.Directory`, `RoleManagement.Read.Directory`
-  - `PrivilegedAccess.ReadWrite.AzureAD`, `PrivilegedAccess.ReadWrite.AzureResources`
-  - Azure Service Management `user_impersonation`
+- .NET 8.0 runtime (or SDK to build from source)
 
-### Build & Run
+### Build & Publish
 
 ```bash
-dotnet build
-dotnet run --project Azure.PIM.Tray
+dotnet publish Azure.PIM.Tray --configuration Release --self-contained false
 ```
+
+This produces `Azure.PIM.Tray-{version}.zip` in `bin/Release/` ready to extract to Program Files.
+
+### App Registration Setup
+
+The app requires an Entra ID (Azure AD) app registration named **"PIM Request Manager"** in each tenant you want to manage. You can create this manually or let the app's **Fix Permissions** button configure it for you.
+
+#### Option A: Automatic (recommended)
+
+1. Create a new app registration in the [Azure Portal](https://portal.azure.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade):
+   - Name: **PIM Request Manager**
+   - Supported account types: **Single tenant**
+   - Redirect URI: **Public client/native** — `http://localhost`
+2. Launch the app, open **Manage Tenants**, enter your Tenant ID and email, click **Connect & Discover**
+3. Select the tenant in the list and click **Fix Permissions** (requires **Global Administrator**)
+4. The app will automatically add all required API permissions and grant admin consent
+
+#### Option B: Manual
+
+1. Create the app registration as above
+2. Under **API permissions**, add the following **Delegated** permissions:
+
+   **Microsoft Graph:**
+   | Permission | Purpose |
+   |------------|---------|
+   | `User.Read` | Identify the signed-in user |
+   | `RoleAssignmentSchedule.ReadWrite.Directory` | Read/write Entra ID PIM role assignments |
+   | `RoleManagement.Read.Directory` | Read Entra ID role definitions and eligibility |
+   | `PrivilegedAccess.ReadWrite.AzureAD` | Approve Entra ID PIM requests |
+   | `PrivilegedAccess.ReadWrite.AzureResources` | Approve Azure resource PIM requests |
+
+   **Azure Service Management:**
+   | Permission | Purpose |
+   |------------|---------|
+   | `user_impersonation` | Access ARM APIs for Azure RBAC PIM |
+
+3. Click **Grant admin consent** for all permissions
+4. Under **Authentication**, ensure **Allow public client flows** is set to **Yes**
+
+#### PIM Role Requirements
+
+The app registration permissions allow the app to *call* the PIM APIs, but the signed-in user must also be assigned as an **approver** in the relevant PIM policies to approve requests. If you can see pending requests but approval fails with "not assigned to you", check the PIM role settings in the Azure Portal to confirm your account is listed as an approver. Note that Azure PIM does not allow users to approve their own requests.
+
+#### Verifying Permissions
+
+After setup, select the tenant in **Manage Tenants** and check the **Permissions** column. A green checkmark indicates all permissions are correctly configured. If any are missing, the app will show what's needed.
 
 ### First-Time Setup
 
-1. The app launches to the system tray and opens the **Manage Tenants** window
+1. Launch the app — it starts in the system tray and opens **Manage Tenants**
 2. Enter your Tenant ID and email, then click **Connect & Discover**
-3. Sign in via browser when prompted — the app registers and configures itself
-4. Expand a tenant node to see subscriptions; uncheck any you don't need to monitor
-5. Close the window — the app begins monitoring in the background
+3. Sign in via browser when prompted
+4. If permissions are missing, click **Fix Permissions** (requires Global Administrator) or configure them manually as described above
+5. Click **Sign In** to authenticate with the app's own credentials
+6. Expand a tenant node to see subscriptions; uncheck any you don't need to monitor
+7. Close the window — the app begins monitoring in the background
+
+Repeat for each tenant you want to manage.
 
 ## Configuration
 
