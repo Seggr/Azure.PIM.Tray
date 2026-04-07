@@ -14,6 +14,7 @@ public partial class LogViewerWindow : Window
     {
         InitializeComponent();
         WindowIconHelper.ApplyLogViewerIcon(this);
+        WindowIconHelper.CenterOnActiveScreen(this);
 
         CboMinLevel.SelectedIndex = (int)AppLog.MinLevel;
         ChkLogToDisk.IsChecked    = AppLog.LogToDisk;
@@ -85,9 +86,14 @@ public partial class LogViewerWindow : Window
 
     private void ChkLogToDisk_Changed(object sender, RoutedEventArgs e)
     {
+        if (!IsInitialized) return;
         var enabled = ChkLogToDisk.IsChecked == true;
         AppLog.LogToDisk        = enabled;
         BtnOpenLogDir.IsEnabled = enabled;
+
+        // Persist to config
+        var config = ConnectionService.LoadConfig();
+        ConnectionService.SaveConfig(config with { LogToDisk = enabled });
     }
 
     private void OpenLogDir_Click(object sender, RoutedEventArgs e)

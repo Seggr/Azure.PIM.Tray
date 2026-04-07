@@ -31,9 +31,7 @@ internal static class ConnectionService
     [
         "User.Read",
         "RoleAssignmentSchedule.ReadWrite.Directory",
-        "RoleManagement.Read.Directory",
-        "PrivilegedAccess.ReadWrite.AzureAD",
-        "PrivilegedAccess.ReadWrite.AzureResources"
+        "RoleEligibilitySchedule.Read.Directory"
     ];
 
     // ------------------------------------------------------------------
@@ -478,33 +476,11 @@ internal static class ConnectionService
             }
         }
 
+        // Build exact required permissions — replaces everything (removes stale/legacy)
         var graphAccess = new List<(string Id, string Type)>();
-        var armAccess   = new List<(string Id, string Type)>();
-        var otherNodes  = new List<JsonNode>();
-        if (appNode["requiredResourceAccess"] is JsonArray existingRra)
-            foreach (var rra in existingRra)
-            {
-                var resId = rra?["resourceAppId"]?.GetValue<string>();
-                List<(string, string)>? bucket = null;
-                if      (string.Equals(resId, MicrosoftGraphAppId,   StringComparison.OrdinalIgnoreCase)) bucket = graphAccess;
-                else if (string.Equals(resId, AzureServiceMgmtAppId, StringComparison.OrdinalIgnoreCase)) bucket = armAccess;
-                else { if (rra is not null) otherNodes.Add(rra.DeepClone()); continue; }
-                if (rra?["resourceAccess"] is JsonArray raArr)
-                    foreach (var r in raArr)
-                    {
-                        var id   = r?["id"]?.GetValue<string>();
-                        var type = r?["type"]?.GetValue<string>() ?? "Scope";
-                        if (id is not null) bucket!.Add((id, type));
-                    }
-            }
-
-        var existingGraphIds = graphAccess.Select(x => x.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
         foreach (var name in RequiredGraphScopes)
-            if (nameToId.TryGetValue(name, out var sid) && existingGraphIds.Add(sid))
+            if (nameToId.TryGetValue(name, out var sid))
                 graphAccess.Add((sid, "Scope"));
-
-        if (!armAccess.Any(a => a.Id.Equals(armScopeId, StringComparison.OrdinalIgnoreCase)))
-            armAccess.Add((armScopeId, "Scope"));
 
         static JsonObject MakeRra(string appId, IEnumerable<(string Id, string Type)> items) => new()
         {
@@ -514,16 +490,17 @@ internal static class ConnectionService
                 .ToArray())
         };
         var updatedRra = new JsonArray();
-        updatedRra.Add(MakeRra(MicrosoftGraphAppId,   graphAccess));
-        updatedRra.Add(MakeRra(AzureServiceMgmtAppId, armAccess));
-        foreach (var n in otherNodes) updatedRra.Add(n.DeepClone());
+        updatedRra.Add(MakeRra(MicrosoftGraphAppId, graphAccess));
+        if (armSpId is not null)
+            updatedRra.Add(MakeRra(AzureServiceMgmtAppId, [(armScopeId, "Scope")]));
+
+        var patchPayload = new JsonObject { ["requiredResourceAccess"] = updatedRra }.ToJsonString();
+        AppLog.Debug("FixPermissions", $"PATCH /applications/{appObjectId}: {patchPayload}");
 
         using var patchReq = new HttpRequestMessage(new HttpMethod("PATCH"),
             $"{GraphBase}/applications/{appObjectId}")
         {
-            Content = new StringContent(
-                new JsonObject { ["requiredResourceAccess"] = updatedRra }.ToJsonString(),
-                Encoding.UTF8, "application/json")
+            Content = new StringContent(patchPayload, Encoding.UTF8, "application/json")
         };
         var patchResp = await http.SendAsync(patchReq, ct);
         if (!patchResp.IsSuccessStatusCode)
@@ -531,6 +508,7 @@ internal static class ConnectionService
             var b = await patchResp.Content.ReadAsStringAsync(ct);
             return $"Failed to update permissions — {DescribeFailure(patchResp.StatusCode, b)}";
         }
+        AppLog.Info("FixPermissions", $"Updated app manifest: {graphAccess.Count} Graph + 1 ARM scope(s)");
 
         var appSpFilter = Uri.EscapeDataString($"appId eq '{connection.ClientId}'");
         var appSpResp   = await http.GetAsync(
@@ -543,11 +521,16 @@ internal static class ConnectionService
             return "Permissions registered — app service principal not found; grant consent in Azure Portal";
         var appSpId = appSpArr[0]!["id"]!.GetValue<string>();
 
-        await GrantAdminConsentAsync(http, appSpId, graphSpId, string.Join(" ", RequiredGraphScopes), ct);
+        var graphScopes = string.Join(" ", RequiredGraphScopes);
+        AppLog.Info("FixPermissions", $"Setting Graph consent to: {graphScopes}");
+        await GrantAdminConsentAsync(http, appSpId, graphSpId, graphScopes, ct);
         if (armSpId is not null)
+        {
+            AppLog.Info("FixPermissions", "Setting ARM consent to: user_impersonation");
             await GrantAdminConsentAsync(http, appSpId, armSpId, "user_impersonation", ct);
+        }
 
-        return "\u2713 Permissions registered and admin consent granted";
+        return "\u2713 Permissions updated and admin consent granted (removed stale permissions)";
     }
 
     private static async Task GrantAdminConsentAsync(
@@ -563,16 +546,12 @@ internal static class ConnectionService
             var grants   = listRoot["value"]!.AsArray();
             if (grants.Count > 0)
             {
-                var grantId  = grants[0]!["id"]!.GetValue<string>();
-                var existing = grants[0]!["scope"]?.GetValue<string>() ?? "";
-                var merged   = existing
-                    .Split(' ', StringSplitOptions.RemoveEmptyEntries)
-                    .Concat(scopes.Split(' ', StringSplitOptions.RemoveEmptyEntries))
-                    .Distinct(StringComparer.OrdinalIgnoreCase);
+                var grantId = grants[0]!["id"]!.GetValue<string>();
+                // Replace with exact required scopes (removes stale permissions)
                 await http.PatchAsync(
                     $"{GraphBase}/oauth2PermissionGrants/{grantId}",
                     new StringContent(
-                        new JsonObject { ["scope"] = string.Join(" ", merged) }.ToJsonString(),
+                        new JsonObject { ["scope"] = scopes }.ToJsonString(),
                         Encoding.UTF8, "application/json"),
                     ct);
                 return;

@@ -148,6 +148,7 @@ public partial class ManageWindow : Window
     {
         InitializeComponent();
         WindowIconHelper.ApplyManageIcon(this);
+        WindowIconHelper.CenterOnActiveScreen(this);
         _config = config;
         _tenantNodes = new ObservableCollection<TenantTreeNode>(
             config.Connections.Select(c => new TenantTreeNode(c)));

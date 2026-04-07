@@ -18,6 +18,7 @@ public record TrayConnection
 public record TrayAppConfig
 {
     public List<TrayConnection> Connections { get; init; } = [];
+    public bool LogToDisk { get; init; }
 }
 
 // ---------------------------------------------------------------------------

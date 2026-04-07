@@ -16,6 +16,7 @@ public partial class ActivateWindow : Window
     {
         InitializeComponent();
         WindowIconHelper.ApplyActivateIcon(this);
+        WindowIconHelper.CenterOnActiveScreen(this);
         _role   = role;
         _tenant = tenant;
 

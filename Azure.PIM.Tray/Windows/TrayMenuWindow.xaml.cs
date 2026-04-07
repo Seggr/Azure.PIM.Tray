@@ -1,0 +1,213 @@
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
+using Brushes = System.Windows.Media.Brushes;
+using Color = System.Windows.Media.Color;
+using ColorConverter = System.Windows.Media.ColorConverter;
+using Cursors = System.Windows.Input.Cursors;
+using FontFamily = System.Windows.Media.FontFamily;
+using Orientation = System.Windows.Controls.Orientation;
+using Point = System.Windows.Point;
+using Size = System.Windows.Size;
+
+namespace Azure.PIM.Tray.Windows;
+
+public partial class TrayMenuWindow : Window
+{
+    private TrayMenuWindow? _submenu;
+    private Border? _activeSubmenuItem;
+
+    public TrayMenuWindow()
+    {
+        InitializeComponent();
+    }
+
+    public StackPanel Items => MenuPanel;
+
+    public void AddItem(string text, Action? onClick = null, bool isHeader = false,
+        bool isDisabled = false, string? foreground = null, bool isBold = false,
+        bool hasSubmenu = false, Action<TrayMenuWindow>? buildSubmenu = null)
+    {
+        var item = new Border
+        {
+            Padding = new Thickness(12, 6, 24, 6),
+            Background = Brushes.Transparent,
+            Cursor = isDisabled ? Cursors.Arrow : Cursors.Hand
+        };
+
+        var panel = new StackPanel { Orientation = Orientation.Horizontal };
+
+        var label = new TextBlock
+        {
+            Text = text,
+            FontSize = 12,
+            FontFamily = new FontFamily("Segoe UI"),
+            FontWeight = isBold || isHeader ? FontWeights.SemiBold : FontWeights.Normal,
+            Foreground = foreground is not null
+                ? new SolidColorBrush((Color)ColorConverter.ConvertFromString(foreground))
+                : isDisabled ? Brushes.Gray : Brushes.Black,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        panel.Children.Add(label);
+
+        if (hasSubmenu)
+        {
+            panel.Children.Add(new TextBlock
+            {
+                Text = "  \u25b6",
+                FontSize = 10,
+                Foreground = Brushes.Gray,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(8, 0, 0, 0)
+            });
+        }
+
+        item.Child = panel;
+
+        if (!isDisabled)
+        {
+            item.MouseEnter += (_, _) =>
+            {
+                item.Background = new SolidColorBrush(Color.FromRgb(0xE8, 0xF0, 0xFF));
+
+                if (hasSubmenu && buildSubmenu is not null)
+                    OpenSubmenuFor(item, buildSubmenu);
+                else
+                    CloseSubmenu(); // Close any open submenu when hovering a non-submenu item
+            };
+
+            item.MouseLeave += (_, _) =>
+            {
+                item.Background = Brushes.Transparent;
+            };
+
+            if (!hasSubmenu && onClick is not null)
+            {
+                item.MouseLeftButtonUp += (_, _) =>
+                {
+                    CloseAll();
+                    onClick();
+                };
+            }
+            else if (hasSubmenu && onClick is null && buildSubmenu is not null)
+            {
+                // Submenu items: click also opens (for accessibility)
+                item.MouseLeftButtonUp += (_, _) => OpenSubmenuFor(item, buildSubmenu);
+            }
+        }
+
+        MenuPanel.Children.Add(item);
+    }
+
+    private void OpenSubmenuFor(Border item, Action<TrayMenuWindow> buildSubmenu)
+    {
+        // Already showing for this item
+        if (_activeSubmenuItem == item && _submenu is { IsVisible: true })
+            return;
+
+        CloseSubmenu();
+
+        var sub = new TrayMenuWindow();
+        buildSubmenu(sub);
+        _submenu = sub;
+        _activeSubmenuItem = item;
+
+        sub.WindowStartupLocation = WindowStartupLocation.Manual;
+
+        // Measure without showing
+        sub.MenuPanel.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        var subDesired = sub.MenuPanel.DesiredSize;
+        var subW = subDesired.Width + 20;
+        var subH = subDesired.Height + 20;
+
+        var targetLeft = Left + ActualWidth - 2;
+        var targetTop  = Top + item.TranslatePoint(new Point(0, 0), this).Y;
+
+        // Keep submenu on screen
+        var screen = System.Windows.Forms.Screen.FromPoint(
+            new System.Drawing.Point((int)Left, (int)Top));
+        var dpi = VisualTreeHelper.GetDpi(this);
+        var workRight  = screen.WorkingArea.Right  / dpi.DpiScaleX;
+        var workBottom = screen.WorkingArea.Bottom / dpi.DpiScaleY;
+        var workLeft   = screen.WorkingArea.Left   / dpi.DpiScaleX;
+        var workTop    = screen.WorkingArea.Top    / dpi.DpiScaleY;
+
+        if (targetLeft + subW > workRight)
+            targetLeft = Left - subW + 2;
+        if (targetTop + subH > workBottom)
+            targetTop = workBottom - subH;
+        targetLeft = Math.Max(workLeft, targetLeft);
+        targetTop  = Math.Max(workTop, targetTop);
+
+        sub.Left = targetLeft;
+        sub.Top = targetTop;
+        sub.Show();
+    }
+
+    public void AddSeparator()
+    {
+        MenuPanel.Children.Add(new Separator
+        {
+            Margin = new Thickness(8, 2, 8, 2),
+            Background = Brushes.LightGray
+        });
+    }
+
+    public void PositionNearTray()
+    {
+        WindowStartupLocation = WindowStartupLocation.Manual;
+
+        // Measure without showing
+        MenuPanel.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        var desired = MenuPanel.DesiredSize;
+        // Add padding for border + shadow
+        var estWidth  = desired.Width + 20;
+        var estHeight = desired.Height + 20;
+
+        var cursor = System.Windows.Forms.Cursor.Position;
+        var screen = System.Windows.Forms.Screen.FromPoint(cursor);
+        var dpi = VisualTreeHelper.GetDpi(this);
+
+        var workLeft   = screen.WorkingArea.Left   / dpi.DpiScaleX;
+        var workTop    = screen.WorkingArea.Top    / dpi.DpiScaleY;
+        var workRight  = screen.WorkingArea.Right  / dpi.DpiScaleX;
+        var workBottom = screen.WorkingArea.Bottom / dpi.DpiScaleY;
+        var cursorX    = cursor.X / dpi.DpiScaleX;
+
+        Left = Math.Min(cursorX, workRight - estWidth);
+        Top  = workBottom - estHeight;
+        Left = Math.Max(workLeft, Left);
+        Top  = Math.Max(workTop, Top);
+
+        Show();
+        Activate();
+    }
+
+    private void CloseSubmenu()
+    {
+        if (_submenu is not null)
+        {
+            _submenu.CloseSubmenu();
+            _submenu.Close();
+            _submenu = null;
+        }
+        _activeSubmenuItem = null;
+    }
+
+    public void CloseAll()
+    {
+        CloseSubmenu();
+        Close();
+    }
+
+    private void Window_Deactivated(object? sender, EventArgs e)
+    {
+        // Check after focus has settled — submenu may be receiving focus
+        Dispatcher.InvokeAsync(() =>
+        {
+            if (_submenu is { IsActive: true } or { IsMouseOver: true }) return;
+            if (IsActive) return; // Re-activated before dispatch ran
+            CloseAll();
+        }, System.Windows.Threading.DispatcherPriority.Input);
+    }
+}

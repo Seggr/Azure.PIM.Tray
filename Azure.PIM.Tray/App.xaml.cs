@@ -33,6 +33,7 @@ public partial class App : System.Windows.Application
         base.OnStartup(e);
 
         _config = ConnectionService.LoadConfig();
+        AppLog.LogToDisk = _config.LogToDisk;
         BuildServicesInitial();
 
         // Tray icon

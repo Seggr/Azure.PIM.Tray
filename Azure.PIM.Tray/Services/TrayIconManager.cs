@@ -1,6 +1,4 @@
 using System.Drawing;
-using System.Runtime.InteropServices;
-using System.Windows;
 using System.Windows.Forms;
 using System.Windows.Threading;
 using Azure.PIM.Tray.Models;
@@ -10,22 +8,16 @@ namespace Azure.PIM.Tray.Services;
 public sealed class TrayIconManager : IDisposable
 {
     private NotifyIcon?      _notifyIcon;
-    private Form?            _ownerForm;
     private DispatcherTimer? _errorBalloonDebounce;
     private bool             _lastBalloonWasError;
     private List<UnifiedPendingRequest> _lastBalloonRequests = [];
     private readonly Dispatcher _dispatcher;
-
-    [DllImport("user32.dll", SetLastError = true)]
-    private static extern bool SetForegroundWindow(IntPtr hWnd);
 
     /// <summary>Raised when the user clicks the tray icon.</summary>
     public event Action? TrayClicked;
 
     /// <summary>Raised when a balloon tip is clicked.</summary>
     public event Action<bool, List<UnifiedPendingRequest>>? BalloonClicked;
-
-    public Form? OwnerForm => _ownerForm;
 
     public TrayIconManager(Dispatcher dispatcher)
     {
@@ -34,18 +26,6 @@ public sealed class TrayIconManager : IDisposable
 
     public void Initialize()
     {
-        _ownerForm = new Form
-        {
-            Width           = 0,
-            Height          = 0,
-            FormBorderStyle = FormBorderStyle.None,
-            ShowInTaskbar   = false,
-            Opacity         = 0,
-            WindowState     = FormWindowState.Minimized
-        };
-        _ownerForm.Show();
-        _ownerForm.Hide();
-
         _notifyIcon = new NotifyIcon
         {
             Icon    = CreateTrayIcon(),
@@ -80,12 +60,6 @@ public sealed class TrayIconManager : IDisposable
                 _errorBalloonDebounce.Start();
             });
         };
-    }
-
-    public void BringOwnerToForeground()
-    {
-        if (_ownerForm is not null)
-            SetForegroundWindow(_ownerForm.Handle);
     }
 
     public void UpdateTrayIcon(int pendingCount)
@@ -155,6 +129,5 @@ public sealed class TrayIconManager : IDisposable
     {
         _errorBalloonDebounce?.Stop();
         _notifyIcon?.Dispose();
-        _ownerForm?.Dispose();
     }
 }

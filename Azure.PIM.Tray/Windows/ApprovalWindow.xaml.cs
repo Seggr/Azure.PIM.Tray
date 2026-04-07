@@ -13,6 +13,7 @@ public partial class ApprovalWindow : Window
     {
         InitializeComponent();
         WindowIconHelper.ApplyApprovalIcon(this);
+        WindowIconHelper.CenterOnActiveScreen(this);
         _request = request;
         _tenant  = tenant;
 

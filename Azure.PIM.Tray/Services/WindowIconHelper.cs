@@ -46,6 +46,31 @@ internal static class WindowIconHelper
     public static void ApplyManageIcon(Window w)     => SetIcon(w, Color.FromArgb(0x88, 0x44, 0xCC), "\u2699"); // purple gear
     public static void ApplyRefreshIcon(Window w)    => SetIcon(w, Color.FromArgb(0x00, 0x66, 0xCC), "\u21ba"); // blue refresh
 
+    /// <summary>
+    /// Centers a WPF window on the screen where the mouse cursor currently is.
+    /// Call after InitializeComponent() and before ShowDialog()/Show().
+    /// </summary>
+    public static void CenterOnActiveScreen(Window w)
+    {
+        var cursor = System.Windows.Forms.Cursor.Position;
+        var screen = System.Windows.Forms.Screen.FromPoint(cursor);
+        var dpi    = System.Windows.Media.VisualTreeHelper.GetDpi(w);
+
+        // Convert screen working area from physical pixels to WPF logical units
+        var workLeft   = screen.WorkingArea.Left   / dpi.DpiScaleX;
+        var workTop    = screen.WorkingArea.Top    / dpi.DpiScaleY;
+        var workWidth  = screen.WorkingArea.Width  / dpi.DpiScaleX;
+        var workHeight = screen.WorkingArea.Height / dpi.DpiScaleY;
+
+        // Use defined dimensions, fall back to reasonable defaults for SizeToContent windows
+        var winW = double.IsNaN(w.Width)  ? 400 : w.Width;
+        var winH = double.IsNaN(w.Height) ? 300 : w.Height;
+
+        w.WindowStartupLocation = WindowStartupLocation.Manual;
+        w.Left = workLeft + (workWidth  - winW) / 2;
+        w.Top  = workTop  + (workHeight - winH) / 2;
+    }
+
     [System.Runtime.InteropServices.DllImport("gdi32.dll")]
     private static extern bool DeleteObject(IntPtr hObject);
 }
