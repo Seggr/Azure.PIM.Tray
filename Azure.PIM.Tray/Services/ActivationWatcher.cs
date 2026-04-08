@@ -54,7 +54,7 @@ public sealed class ActivationWatcher
                 "Failed"      => (ToolTipIcon.Error,   $"\u2717 {roleName} activation failed."),
                 "Canceled"    => (ToolTipIcon.Warning, $"\u2717 {roleName} was canceled."),
                 "Revoked"     => (ToolTipIcon.Warning, $"\u2717 {roleName} was revoked."),
-                "TimedOut"    => (ToolTipIcon.Warning, $"\u26a0 {roleName}: still pending after 10 min."),
+                "TimedOut"    => (ToolTipIcon.Warning, $"\u26a0 {roleName}: polling stopped."),
                 _             => (ToolTipIcon.Info,    $"{roleName}: {status}")
             };
 

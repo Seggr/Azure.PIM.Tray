@@ -38,7 +38,8 @@ public sealed class TenantContext : ITenantContext
     public string LastRefreshStatus => _lastRefreshStatus;
 
     public TenantContext(TrayConnection connection, TokenCredential credential,
-        Action<IReadOnlyList<UnifiedEligibleRole>>? onCacheSave = null)
+        Action<IReadOnlyList<UnifiedEligibleRole>>? onCacheSave = null,
+        Action<TrayConnection>? onConnectionChanged = null)
     {
         Connection   = connection;
         _onCacheSave = onCacheSave;
@@ -56,6 +57,16 @@ public sealed class TenantContext : ITenantContext
             connection.TenantDisplayName ?? connection.TenantId,
             connection.Email,
             connection.ExcludedSubscriptions);
+
+        _svc.OnEmptySubscriptions = emptySubs =>
+        {
+            var current = connection.ExcludedSubscriptions.ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var added = emptySubs.Where(id => current.Add(id)).ToList();
+            if (added.Count == 0) return;
+
+            var updated = connection with { ExcludedSubscriptions = [.. current] };
+            onConnectionChanged?.Invoke(updated);
+        };
     }
 
     public async Task RefreshPendingAsync(IProgress<string>? progress = null, CancellationToken ct = default)
