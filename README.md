@@ -57,9 +57,8 @@ The app requires an Entra ID (Azure AD) app registration named **"PIM Request Ma
    |------------|---------|
    | `User.Read` | Identify the signed-in user |
    | `RoleAssignmentSchedule.ReadWrite.Directory` | Read/write Entra ID PIM role assignments |
-   | `RoleManagement.Read.Directory` | Read Entra ID role definitions and eligibility |
+   | `RoleEligibilitySchedule.Read.Directory` | Read Entra ID role eligibility schedules |
    | `PrivilegedAccess.ReadWrite.AzureAD` | Approve Entra ID PIM requests |
-   | `PrivilegedAccess.ReadWrite.AzureResources` | Approve Azure resource PIM requests |
 
    **Azure Service Management:**
    | Permission | Purpose |

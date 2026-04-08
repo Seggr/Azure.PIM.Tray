@@ -11,11 +11,13 @@
     <RootNamespace>Azure.PIM.Tray</RootNamespace>
     <Version>1.0.1</Version>
     <ApplicationIcon>Assets\tray.ico</ApplicationIcon>
+    <StartupObject>Azure.PIM.Tray.Program</StartupObject>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Azure.Identity" Version="1.13.1" />
     <PackageReference Include="Microsoft.Identity.Client.Extensions.Msal" Version="4.83.3" />
+    <PackageReference Include="Velopack" Version="0.0.1298" />
   </ItemGroup>
 
   <ItemGroup>

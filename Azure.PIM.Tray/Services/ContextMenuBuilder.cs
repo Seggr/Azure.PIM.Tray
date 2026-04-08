@@ -8,6 +8,7 @@ public sealed class ContextMenuBuilder
     private readonly Func<List<ITenantContext>>     _getTenants;
     private readonly RefreshOrchestrator            _refreshOrchestrator;
     private readonly ActivationWatcher              _activationWatcher;
+    private readonly UpdateService                  _updateService;
     private readonly TrayIconManager                _trayIconManager;
     private readonly Action<UnifiedPendingRequest>  _openApprovalWindow;
     private readonly Action<UnifiedEligibleRole>    _openActivateWindow;
@@ -21,6 +22,7 @@ public sealed class ContextMenuBuilder
         Func<List<ITenantContext>>     getTenants,
         RefreshOrchestrator            refreshOrchestrator,
         ActivationWatcher              activationWatcher,
+        UpdateService                  updateService,
         TrayIconManager                trayIconManager,
         Action<UnifiedPendingRequest>  openApprovalWindow,
         Action<UnifiedEligibleRole>    openActivateWindow,
@@ -31,6 +33,7 @@ public sealed class ContextMenuBuilder
         _getTenants          = getTenants;
         _refreshOrchestrator = refreshOrchestrator;
         _activationWatcher   = activationWatcher;
+        _updateService       = updateService;
         _trayIconManager     = trayIconManager;
         _openApprovalWindow  = openApprovalWindow;
         _openActivateWindow  = openActivateWindow;
@@ -72,7 +75,7 @@ public sealed class ContextMenuBuilder
 
         menu.AddSeparator();
 
-        menu.AddItem("\u2699\ufe0f  Manage Tenants\u2026", onClick: _openManageWindow);
+        menu.AddItem("\u2699\ufe0f  Settings\u2026", onClick: _openManageWindow);
 
         menu.AddSeparator();
 
@@ -100,6 +103,17 @@ public sealed class ContextMenuBuilder
         menu.AddItem(logLabel, onClick: _openLogViewerWindow, foreground: logColor);
 
         menu.AddSeparator();
+
+        if (_updateService.UpdateAvailable && !_updateService.IsDownloading)
+        {
+            menu.AddItem($"\u2b06  Update to v{_updateService.AvailableVersion}",
+                onClick: _updateService.ApplyUpdateAndRestart,
+                foreground: "#0088DD", isBold: true);
+        }
+        else
+        {
+            menu.AddItem($"v{_updateService.CurrentVersion}", isDisabled: true);
+        }
 
         menu.AddItem("Quit", onClick: _shutdown);
 
