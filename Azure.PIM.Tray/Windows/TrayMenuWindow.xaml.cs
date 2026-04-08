@@ -19,6 +19,8 @@ public partial class TrayMenuWindow : Window
     private TrayMenuWindow? _parentMenu;
     private Border? _activeSubmenuItem;
     private DispatcherTimer? _scrollTimer;
+    private DispatcherTimer? _submenuDelay;
+    private static readonly TimeSpan SubmenuOpenDelay = TimeSpan.FromMilliseconds(100);
 
     public TrayMenuWindow()
     {
@@ -108,16 +110,30 @@ public partial class TrayMenuWindow : Window
             item.MouseEnter += (_, _) =>
             {
                 item.Background = new SolidColorBrush(Color.FromRgb(0xE8, 0xF0, 0xFF));
+                CancelSubmenuDelay();
 
                 if (hasSubmenu && buildSubmenu is not null)
-                    OpenSubmenuFor(item, buildSubmenu);
+                {
+                    // Delay opening so diagonal mouse movement toward an
+                    // already-open submenu doesn't accidentally swap it.
+                    _submenuDelay = new DispatcherTimer { Interval = SubmenuOpenDelay };
+                    _submenuDelay.Tick += (_, _) =>
+                    {
+                        _submenuDelay?.Stop();
+                        OpenSubmenuFor(item, buildSubmenu);
+                    };
+                    _submenuDelay.Start();
+                }
                 else
-                    CloseSubmenu(); // Close any open submenu when hovering a non-submenu item
+                {
+                    CloseSubmenu();
+                }
             };
 
             item.MouseLeave += (_, _) =>
             {
                 item.Background = Brushes.Transparent;
+                CancelSubmenuDelay();
             };
 
             if (!hasSubmenu && onClick is not null)
@@ -235,6 +251,12 @@ public partial class TrayMenuWindow : Window
 
         Show();
         Activate();
+    }
+
+    private void CancelSubmenuDelay()
+    {
+        _submenuDelay?.Stop();
+        _submenuDelay = null;
     }
 
     private void CloseSubmenu()
