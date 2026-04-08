@@ -12,6 +12,11 @@
     <Version>1.0.1</Version>
     <ApplicationIcon>Assets\tray.ico</ApplicationIcon>
     <StartupObject>Azure.PIM.Tray.Program</StartupObject>
+    <Authors>Jonathan Bland</Authors>
+    <Description>System tray app for managing Azure PIM role activations and approvals across multiple tenants.</Description>
+    <RepositoryUrl>https://github.com/Seggr/Azure.PIM.Tray</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
   </PropertyGroup>
 
   <ItemGroup>
