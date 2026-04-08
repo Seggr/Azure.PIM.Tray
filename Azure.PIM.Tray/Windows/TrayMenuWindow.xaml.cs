@@ -189,11 +189,11 @@ public partial class TrayMenuWindow : Window
         var subW = subDesired.Width + 20;
         var subH = Math.Min(subDesired.Height + 20, workHeight * 0.9);
 
-        var targetLeft = Left + ActualWidth - 2;
+        var targetLeft = Left + ActualWidth - 10; // overlap shadow region
         var targetTop  = Top + item.TranslatePoint(new Point(0, 0), this).Y;
 
         if (targetLeft + subW > workRight)
-            targetLeft = Left - subW + 2;
+            targetLeft = Left - subW + 10; // overlap shadow region
         if (targetTop + subH > workBottom)
             targetTop = workBottom - subH;
         targetLeft = Math.Max(workLeft, targetLeft);
