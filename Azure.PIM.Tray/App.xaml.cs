@@ -16,6 +16,7 @@ public partial class App : System.Windows.Application
     private TrayIconManager?     _trayIcon;
     private RefreshOrchestrator? _refresher;
     private ActivationWatcher?   _watcher;
+    private UpdateService?       _updateService;
     private ContextMenuBuilder?  _contextMenu;
 
     private LogViewerWindow? _logViewerWindow;
@@ -50,11 +51,15 @@ public partial class App : System.Windows.Application
         _refresher = new RefreshOrchestrator(Dispatcher, () => _tenants, _appCts.Token);
         _refresher.RebuildStatusItems(_tenants);
 
+        // Auto-updater
+        _updateService = new UpdateService();
+
         // Context menu
         _contextMenu = new ContextMenuBuilder(
             () => _tenants,
             _refresher,
             _watcher,
+            _updateService,
             _trayIcon,
             OpenApprovalWindow,
             OpenActivateWindow,
@@ -90,6 +95,9 @@ public partial class App : System.Windows.Application
     protected override void OnExit(ExitEventArgs e)
     {
         AppLog.Info("App", "Shutting down");
+        // If an update was downloaded, apply it after the process exits
+        _updateService?.ApplyUpdateOnExit();
+        _updateService?.Dispose();
         Microsoft.Win32.SystemEvents.SessionSwitch    -= OnSessionSwitch;
         Microsoft.Win32.SystemEvents.PowerModeChanged -= OnPowerModeChanged;
         _appCts.Cancel();
@@ -214,7 +222,7 @@ public partial class App : System.Windows.Application
                 return;
             }
 
-            var win = new ManageWindow(_config);
+            var win = new ManageWindow(_config, _updateService);
             win.ConfigChanged += async (_, _) =>
             {
                 _config = ConnectionService.LoadConfig();
@@ -238,6 +246,7 @@ public partial class App : System.Windows.Application
         {
             AppLog.Info("App", "Session unlocked \u2014 triggering refresh");
             Dispatcher.InvokeAsync(() => { _ = _refresher?.RefreshAsync(); });
+            _ = _updateService?.CheckForUpdatesAsync();
         }
     }
 

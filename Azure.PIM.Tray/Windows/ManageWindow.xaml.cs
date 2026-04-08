@@ -141,18 +141,22 @@ public partial class ManageWindow : Window
 {
     private TrayAppConfig _config;
     private readonly ObservableCollection<TenantTreeNode> _tenantNodes;
+    private readonly UpdateService? _updateService;
 
     public event EventHandler? ConfigChanged;
 
-    public ManageWindow(TrayAppConfig config)
+    public ManageWindow(TrayAppConfig config, UpdateService? updateService = null)
     {
         InitializeComponent();
         WindowIconHelper.ApplyManageIcon(this);
         WindowIconHelper.CenterOnActiveScreen(this);
         _config = config;
+        _updateService = updateService;
         _tenantNodes = new ObservableCollection<TenantTreeNode>(
             config.Connections.Select(c => new TenantTreeNode(c)));
         TenantTree.ItemsSource = _tenantNodes;
+
+        TxtVersion.Text = $"v{updateService?.CurrentVersion ?? "dev"}";
 
         _ = CheckAllPermissionsAsync();
     }
@@ -398,6 +402,21 @@ public partial class ManageWindow : Window
     {
         _config = _config with { Connections = [.. _tenantNodes.Select(n => n.Connection)] };
         ConnectionService.SaveConfig(_config);
+    }
+
+    private async void Version_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (_updateService is null) return;
+
+        TxtVersion.Text = "Checking for updates\u2026";
+        await _updateService.CheckForUpdatesAsync();
+
+        if (_updateService.UpdateAvailable)
+            TxtVersion.Text = $"v{_updateService.AvailableVersion} available \u2014 restart to update";
+        else if (_updateService.LastCheckFailed)
+            TxtVersion.Text = $"v{_updateService.CurrentVersion} (check failed)";
+        else
+            TxtVersion.Text = $"v{_updateService.CurrentVersion} (up to date)";
     }
 
     private void ShowAddStatus(string msg, bool isError)
