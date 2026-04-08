@@ -98,7 +98,11 @@ public sealed class UpdateService : IDisposable
 
     public void ApplyUpdateAndRestart()
     {
-        if (_pendingUpdate is null) return;
+        if (_pendingUpdate is null)
+        {
+            AppLog.Warning("Update", "ApplyUpdateAndRestart called but no pending update");
+            return;
+        }
 
         AppLog.Info("Update", $"Applying update v{_pendingUpdate.TargetFullRelease.Version} and restarting...");
         _mgr.ApplyUpdatesAndRestart(_pendingUpdate);

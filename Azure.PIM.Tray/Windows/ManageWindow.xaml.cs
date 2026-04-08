@@ -437,7 +437,15 @@ public partial class ManageWindow : Window
 
     private void UpdateRestart_Click(object sender, RoutedEventArgs e)
     {
-        _updateService?.ApplyUpdateAndRestart();
+        try
+        {
+            Close();
+            _updateService?.ApplyUpdateAndRestart();
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error("Update", $"Failed to apply update: {ex.Message}");
+        }
     }
 
     private void ShowAddStatus(string msg, bool isError)
