@@ -110,10 +110,6 @@ public sealed class ContextMenuBuilder
                 onClick: _updateService.ApplyUpdateAndRestart,
                 foreground: "#0088DD", isBold: true);
         }
-        else
-        {
-            menu.AddItem($"v{_updateService.CurrentVersion}", isDisabled: true);
-        }
 
         menu.AddItem("Quit", onClick: _shutdown);
 

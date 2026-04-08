@@ -124,4 +124,4 @@ This application was developed with assistance from [Claude](https://claude.ai),
 
 ## License
 
-Private — all rights reserved.
+MIT License — see [LICENSE](LICENSE) for details.
