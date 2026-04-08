@@ -72,6 +72,10 @@ public partial class App : System.Windows.Application
 
         _watcher.RefreshRequested += () => _refresher.RefreshAsync();
 
+        // Detect session unlock / resume from sleep to proactively re-authenticate
+        Microsoft.Win32.SystemEvents.SessionSwitch    += OnSessionSwitch;
+        Microsoft.Win32.SystemEvents.PowerModeChanged += OnPowerModeChanged;
+
         // Start
         _refresher.StartTimers();
         AppLog.Info("App", $"Starting up \u2014 {_tenants.Count} tenant(s) configured");
@@ -86,6 +90,8 @@ public partial class App : System.Windows.Application
     protected override void OnExit(ExitEventArgs e)
     {
         AppLog.Info("App", "Shutting down");
+        Microsoft.Win32.SystemEvents.SessionSwitch    -= OnSessionSwitch;
+        Microsoft.Win32.SystemEvents.PowerModeChanged -= OnPowerModeChanged;
         _appCts.Cancel();
         _refresher?.Dispose();
         _trayIcon?.Dispose();
@@ -220,5 +226,27 @@ public partial class App : System.Windows.Application
             _manageWindow = win;
             win.ShowDialog();
         });
+    }
+
+    // ------------------------------------------------------------------
+    // Session / power event handlers
+    // ------------------------------------------------------------------
+
+    private void OnSessionSwitch(object sender, Microsoft.Win32.SessionSwitchEventArgs e)
+    {
+        if (e.Reason == Microsoft.Win32.SessionSwitchReason.SessionUnlock)
+        {
+            AppLog.Info("App", "Session unlocked \u2014 triggering refresh");
+            Dispatcher.InvokeAsync(() => { _ = _refresher?.RefreshAsync(); });
+        }
+    }
+
+    private void OnPowerModeChanged(object sender, Microsoft.Win32.PowerModeChangedEventArgs e)
+    {
+        if (e.Mode == Microsoft.Win32.PowerModes.Resume)
+        {
+            AppLog.Info("App", "Resumed from sleep \u2014 triggering refresh");
+            Dispatcher.InvokeAsync(() => { _ = _refresher?.RefreshAsync(); });
+        }
     }
 }
