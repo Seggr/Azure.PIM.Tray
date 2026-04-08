@@ -104,13 +104,6 @@ public sealed class ContextMenuBuilder
 
         menu.AddSeparator();
 
-        if (_updateService.UpdateAvailable && !_updateService.IsDownloading)
-        {
-            menu.AddItem($"\u2b06  Update to v{_updateService.AvailableVersion}",
-                onClick: _updateService.ApplyUpdateAndRestart,
-                foreground: "#0088DD", isBold: true);
-        }
-
         menu.AddItem("Quit", onClick: _shutdown);
 
         menu.PositionNearTray();

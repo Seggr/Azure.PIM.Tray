@@ -20,6 +20,9 @@ public sealed class UpdateService : IDisposable
     public string? AvailableVersion => _pendingUpdate?.TargetFullRelease?.Version?.ToString();
     public string  CurrentVersion   => _mgr.CurrentVersion?.ToString() ?? "dev";
 
+    /// <summary>Raised (on a background thread) when a non-patch update is downloaded and ready.</summary>
+    public event Action<string>? UpdateReady;
+
     public UpdateService()
     {
         _mgr = new UpdateManager(
@@ -68,6 +71,22 @@ public sealed class UpdateService : IDisposable
             _downloading = false;
             AppLog.Info("Update",
                 $"Update v{update.TargetFullRelease.Version} downloaded and ready to install");
+
+            // Auto-apply patch updates (same major + minor) silently on exit
+            var cur = _mgr.CurrentVersion;
+            var tgt = update.TargetFullRelease.Version;
+            if (cur is not null && tgt.Major == cur.Major && tgt.Minor == cur.Minor)
+            {
+                AppLog.Info("Update",
+                    $"Patch update ({cur} \u2192 {tgt}) \u2014 will apply on next exit");
+                // _pendingUpdate is set; ApplyUpdateOnExit() in App.OnExit handles the rest
+            }
+            else
+            {
+                AppLog.Info("Update",
+                    $"New version {tgt} available \u2014 user action required");
+                UpdateReady?.Invoke(tgt.ToString());
+            }
         }
         catch (Exception ex)
         {
@@ -79,7 +98,11 @@ public sealed class UpdateService : IDisposable
 
     public void ApplyUpdateAndRestart()
     {
-        if (_pendingUpdate is null) return;
+        if (_pendingUpdate is null)
+        {
+            AppLog.Warning("Update", "ApplyUpdateAndRestart called but no pending update");
+            return;
+        }
 
         AppLog.Info("Update", $"Applying update v{_pendingUpdate.TargetFullRelease.Version} and restarting...");
         _mgr.ApplyUpdatesAndRestart(_pendingUpdate);

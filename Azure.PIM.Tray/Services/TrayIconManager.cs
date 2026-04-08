@@ -62,13 +62,37 @@ public sealed class TrayIconManager : IDisposable
         };
     }
 
+    private int     _lastPendingCount;
+    private string? _updateVersion;
+
     public void UpdateTrayIcon(int pendingCount)
     {
+        _lastPendingCount = pendingCount;
+        RefreshIconAndTooltip();
+    }
+
+    public void NotifyUpdateAvailable(string version)
+    {
+        _updateVersion = version;
+        _notifyIcon?.ShowBalloonTip(
+            8000, "PIM Request Manager",
+            $"Version {version} is available \u2014 open Settings to update.",
+            ToolTipIcon.Info);
+        RefreshIconAndTooltip();
+    }
+
+    private void RefreshIconAndTooltip()
+    {
         if (_notifyIcon is null) return;
-        _notifyIcon.Text = pendingCount > 0
-            ? $"PIM Request Manager \u2014 {pendingCount} pending approval(s)"
+
+        var tooltip = _lastPendingCount > 0
+            ? $"PIM Request Manager \u2014 {_lastPendingCount} pending approval(s)"
             : "PIM Request Manager \u2014 no pending approvals";
-        _notifyIcon.Icon = CreateTrayIcon(pendingCount > 0);
+        if (_updateVersion is not null)
+            tooltip += $"\nUpdate v{_updateVersion} available";
+
+        _notifyIcon.Text = tooltip.Length > 63 ? tooltip[..63] : tooltip;
+        _notifyIcon.Icon = CreateTrayIcon(_lastPendingCount > 0, _updateVersion is not null);
     }
 
     public void ShowBalloon(List<UnifiedPendingRequest> newRequests)
@@ -107,15 +131,17 @@ public sealed class TrayIconManager : IDisposable
         _notifyIcon?.ShowBalloonTip(8_000, "PIM Request Manager \u2014 Log", msg, ToolTipIcon.Warning);
     }
 
-    internal static Icon CreateTrayIcon(bool hasPending = false)
+    internal static Icon CreateTrayIcon(bool hasPending = false, bool hasUpdate = false)
     {
         var bmp = new Bitmap(16, 16);
         using (var g = Graphics.FromImage(bmp))
         {
             g.Clear(Color.Transparent);
             var bg = hasPending
-                ? Color.FromArgb(0xCC, 0x44, 0x00)
-                : Color.FromArgb(0x00, 0x66, 0xCC);
+                ? Color.FromArgb(0xCC, 0x44, 0x00)   // orange — pending approvals
+                : hasUpdate
+                    ? Color.FromArgb(0x00, 0x88, 0x44) // green — update available
+                    : Color.FromArgb(0x00, 0x66, 0xCC); // blue — normal
             using var brush = new SolidBrush(bg);
             g.FillEllipse(brush, 1, 1, 14, 14);
             using var font = new Font("Arial", 8f, System.Drawing.FontStyle.Bold);

@@ -77,6 +77,9 @@ public partial class App : System.Windows.Application
 
         _watcher.RefreshRequested += () => _refresher.RefreshAsync();
 
+        _updateService.UpdateReady += version =>
+            Dispatcher.InvokeAsync(() => _trayIcon.NotifyUpdateAvailable(version));
+
         // Detect session unlock / resume from sleep to proactively re-authenticate
         Microsoft.Win32.SystemEvents.SessionSwitch    += OnSessionSwitch;
         Microsoft.Win32.SystemEvents.PowerModeChanged += OnPowerModeChanged;
