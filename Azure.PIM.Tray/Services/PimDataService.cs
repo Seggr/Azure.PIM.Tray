@@ -12,6 +12,12 @@ internal sealed class PimDataService : IAsyncDisposable
     public string TenantDisplayName { get; }
     public string Email             { get; }
 
+    public Action<List<string>>? OnEmptySubscriptions
+    {
+        get => _arm.OnEmptySubscriptions;
+        set => _arm.OnEmptySubscriptions = value;
+    }
+
     public PimDataService(TokenCredential credential, string tenantId, string tenantDisplayName, string email,
         IReadOnlyList<string>? excludedSubscriptions = null)
     {

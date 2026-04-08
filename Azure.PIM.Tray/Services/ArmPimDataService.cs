@@ -82,6 +82,12 @@ internal sealed class ArmPimDataService : IAsyncDisposable
     // Eligible roles
     // ------------------------------------------------------------------
 
+    /// <summary>
+    /// Called with subscription IDs that returned zero eligible roles so callers can
+    /// auto-exclude them from future scans.
+    /// </summary>
+    public Action<List<string>>? OnEmptySubscriptions { get; set; }
+
     public async Task<List<UnifiedEligibleRole>> GetArmEligibleRolesAsync(
         string myId, CancellationToken ct = default)
     {
@@ -90,7 +96,8 @@ internal sealed class ArmPimDataService : IAsyncDisposable
         AppLog.Info($"ARM Eligible ({TenantDisplayName})",
             $"Found {subs.Count} subscription(s) to scan");
 
-        var result = new List<UnifiedEligibleRole>();
+        var result   = new List<UnifiedEligibleRole>();
+        var emptySubs = new List<string>();
 
         const int batchSize = 2;
         foreach (var batch in subs.Chunk(batchSize))
@@ -104,7 +111,7 @@ internal sealed class ArmPimDataService : IAsyncDisposable
                            + $"&$filter={filter}&$expand=expandedProperties";
 
                 var page = await ArmGetAsync<ArmCollection<ArmEligibilitySchedule>>(token, url, ct);
-                return (page?.Value ?? []).Select(s => new UnifiedEligibleRole
+                var roles = (page?.Value ?? []).Select(s => new UnifiedEligibleRole
                 {
                     Source                         = PimSource.AzureRbac,
                     TenantId                       = TenantId,
@@ -117,16 +124,33 @@ internal sealed class ArmPimDataService : IAsyncDisposable
                     ArmPrincipalId                 = myId,
                     ArmLinkedEligibilityScheduleId = s.Id
                 }).ToList();
+
+                return (subId, roles);
             });
 
-            foreach (var list in await Task.WhenAll(tasks))
-                result.AddRange(list);
+            foreach (var (subId, roles) in await Task.WhenAll(tasks))
+            {
+                if (roles.Count == 0)
+                    emptySubs.Add(subId);
+                else
+                    result.AddRange(roles);
+            }
 
             if (batch.Length == batchSize)
                 await Task.Delay(500, ct);
         }
+
+        if (emptySubs.Count > 0)
+        {
+            foreach (var subId in emptySubs)
+                AppLog.Info($"ARM Eligible ({TenantDisplayName})",
+                    $"Auto-excluding subscription {subId} \u2014 no eligible roles");
+            OnEmptySubscriptions?.Invoke(emptySubs);
+        }
+
         AppLog.Info($"ARM Eligible ({TenantDisplayName})",
-            $"Fetched {result.Count} eligible role(s) across {subs.Count} subscription(s)");
+            $"Fetched {result.Count} eligible role(s) across {subs.Count} subscription(s)" +
+            (emptySubs.Count > 0 ? $" ({emptySubs.Count} excluded)" : ""));
         return result;
     }
 
@@ -263,22 +287,34 @@ internal sealed class ArmPimDataService : IAsyncDisposable
 
     public async Task<string> PollActivationAsync(string pollUrl, CancellationToken ct)
     {
-        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(10));
-        using var linked  = CancellationTokenSource.CreateLinkedTokenSource(ct, timeout.Token);
-        var pollCt = linked.Token;
+        var started = DateTimeOffset.UtcNow;
+        var slowPhase = false;
 
-        while (!pollCt.IsCancellationRequested)
+        while (!ct.IsCancellationRequested)
         {
-            try { await Task.Delay(TimeSpan.FromSeconds(10), pollCt); }
+            var elapsed = DateTimeOffset.UtcNow - started;
+            if (!slowPhase && elapsed >= TimeSpan.FromMinutes(5))
+            {
+                slowPhase = true;
+                AppLog.Debug($"Poll ({TenantDisplayName})", $"Switching to 60s poll interval for {pollUrl}");
+            }
+
+            var delay = slowPhase ? TimeSpan.FromMinutes(1) : TimeSpan.FromSeconds(10);
+
+            try { await Task.Delay(delay, ct); }
             catch (OperationCanceledException) { break; }
 
             try
             {
-                var token  = await GetArmTokenAsync(pollCt);
-                var resp   = await ArmGetAsync<ArmScheduleRequestStatus>(token, pollUrl, pollCt);
+                var token  = await GetArmTokenAsync(ct);
+                var resp   = await ArmGetAsync<ArmScheduleRequestStatus>(token, pollUrl, ct);
                 var status = resp?.Properties?.Status ?? "Unknown";
 
                 if (status is "Provisioned" or "Granted" or "Denied" or "Failed" or "Revoked" or "Canceled")
+                    return status;
+
+                // In slow phase, stop polling if no longer pending approval
+                if (slowPhase && status is not "PendingApproval")
                     return status;
             }
             catch (OperationCanceledException) { break; }

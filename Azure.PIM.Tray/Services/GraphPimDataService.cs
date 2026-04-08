@@ -302,22 +302,34 @@ internal sealed class GraphPimDataService : IAsyncDisposable
 
     public async Task<string> PollActivationAsync(string pollUrl, CancellationToken ct)
     {
-        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(10));
-        using var linked  = CancellationTokenSource.CreateLinkedTokenSource(ct, timeout.Token);
-        var pollCt = linked.Token;
+        var started = DateTimeOffset.UtcNow;
+        var slowPhase = false;
 
-        while (!pollCt.IsCancellationRequested)
+        while (!ct.IsCancellationRequested)
         {
-            try { await Task.Delay(TimeSpan.FromSeconds(10), pollCt); }
+            var elapsed = DateTimeOffset.UtcNow - started;
+            if (!slowPhase && elapsed >= TimeSpan.FromMinutes(5))
+            {
+                slowPhase = true;
+                AppLog.Debug($"Poll ({TenantDisplayName})", $"Switching to 60s poll interval for {pollUrl}");
+            }
+
+            var delay = slowPhase ? TimeSpan.FromMinutes(1) : TimeSpan.FromSeconds(10);
+
+            try { await Task.Delay(delay, ct); }
             catch (OperationCanceledException) { break; }
 
             try
             {
-                var token  = await GetGraphTokenAsync(pollCt);
-                var resp   = await GraphGetAsync<EntraScheduleRequestStatus>(token, pollUrl, pollCt);
+                var token  = await GetGraphTokenAsync(ct);
+                var resp   = await GraphGetAsync<EntraScheduleRequestStatus>(token, pollUrl, ct);
                 var status = resp?.Status ?? "Unknown";
 
                 if (status is "Provisioned" or "Granted" or "Denied" or "Failed" or "Revoked" or "Canceled")
+                    return status;
+
+                // In slow phase, stop polling if no longer pending approval
+                if (slowPhase && status is not "PendingApproval")
                     return status;
             }
             catch (OperationCanceledException) { break; }

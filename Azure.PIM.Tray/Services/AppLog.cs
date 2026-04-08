@@ -26,7 +26,7 @@ public static class AppLog
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "Azure.PIM.Tray", "logs");
 
-    public static LogLevel MinLevel { get; set; } = LogLevel.Debug;
+    public static LogLevel MinLevel { get; set; } = LogLevel.Warning;
 
     /// <summary>Raised on the writing thread after every accepted entry.</summary>
     public static event Action? EntryAdded;
@@ -36,11 +36,17 @@ public static class AppLog
     public static void Warning(string source, string message) => Add(LogLevel.Warning, source, message);
     public static void Error  (string source, string message) => Add(LogLevel.Error,   source, message);
 
+    private const int MaxEntries = 2000;
+
     public static void Add(LogLevel level, string source, string message)
     {
         if (level < MinLevel) return;
         var entry = new LogEntry(DateTimeOffset.Now, level, source, message);
         _entries.Enqueue(entry);
+
+        while (_entries.Count > MaxEntries)
+            _entries.TryDequeue(out _);
+
         WriteToFile(entry);
         System.Diagnostics.Debug.WriteLine($"[{level,-7}] [{source}] {message}");
         EntryAdded?.Invoke();
