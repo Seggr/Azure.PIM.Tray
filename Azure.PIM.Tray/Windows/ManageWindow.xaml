@@ -100,21 +100,39 @@
         </Expander>
 
         <Grid Grid.Row="2">
-            <TextBlock x:Name="TxtVersion"
-                       VerticalAlignment="Center" HorizontalAlignment="Left"
-                       Foreground="#0066CC" Cursor="Hand" FontSize="11"
-                       MouseLeftButtonUp="Version_Click"
-                       ToolTip="Check for updates">
-                <TextBlock.Style>
-                    <Style TargetType="TextBlock">
-                        <Style.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="TextDecorations" Value="Underline"/>
-                            </Trigger>
-                        </Style.Triggers>
-                    </Style>
-                </TextBlock.Style>
-            </TextBlock>
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Left">
+                <TextBlock x:Name="TxtVersion"
+                           VerticalAlignment="Center"
+                           Foreground="#0066CC" Cursor="Hand" FontSize="11"
+                           MouseLeftButtonUp="Version_Click"
+                           ToolTip="Check for updates">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Style.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter Property="TextDecorations" Value="Underline"/>
+                                </Trigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+                <Button x:Name="BtnUpdateRestart"
+                        Content="Update &amp; Restart"
+                        Margin="8,0,0,0" Padding="10,3"
+                        FontSize="11" Cursor="Hand"
+                        Visibility="Collapsed"
+                        Click="UpdateRestart_Click"
+                        ToolTip="Apply the downloaded update and restart the app">
+                    <Button.Style>
+                        <Style TargetType="Button">
+                            <Setter Property="Background" Value="#0088DD"/>
+                            <Setter Property="Foreground" Value="White"/>
+                            <Setter Property="BorderThickness" Value="0"/>
+                            <Setter Property="FontWeight" Value="SemiBold"/>
+                        </Style>
+                    </Button.Style>
+                </Button>
+            </StackPanel>
 
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                 <Button x:Name="BtnFixPermissions"

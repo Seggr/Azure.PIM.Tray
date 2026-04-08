@@ -156,7 +156,15 @@ public partial class ManageWindow : Window
             config.Connections.Select(c => new TenantTreeNode(c)));
         TenantTree.ItemsSource = _tenantNodes;
 
-        TxtVersion.Text = $"v{updateService?.CurrentVersion ?? "dev"}";
+        if (updateService is { UpdateAvailable: true })
+        {
+            TxtVersion.Text = $"v{updateService.AvailableVersion} available";
+            BtnUpdateRestart.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            TxtVersion.Text = $"v{updateService?.CurrentVersion ?? "dev"}";
+        }
 
         _ = CheckAllPermissionsAsync();
     }
@@ -409,14 +417,27 @@ public partial class ManageWindow : Window
         if (_updateService is null) return;
 
         TxtVersion.Text = "Checking for updates\u2026";
+        BtnUpdateRestart.Visibility = Visibility.Collapsed;
         await _updateService.CheckForUpdatesAsync();
 
         if (_updateService.UpdateAvailable)
-            TxtVersion.Text = $"v{_updateService.AvailableVersion} available \u2014 restart to update";
+        {
+            TxtVersion.Text = $"v{_updateService.AvailableVersion} available";
+            BtnUpdateRestart.Visibility = Visibility.Visible;
+        }
         else if (_updateService.LastCheckFailed)
+        {
             TxtVersion.Text = $"v{_updateService.CurrentVersion} (check failed)";
+        }
         else
+        {
             TxtVersion.Text = $"v{_updateService.CurrentVersion} (up to date)";
+        }
+    }
+
+    private void UpdateRestart_Click(object sender, RoutedEventArgs e)
+    {
+        _updateService?.ApplyUpdateAndRestart();
     }
 
     private void ShowAddStatus(string msg, bool isError)
