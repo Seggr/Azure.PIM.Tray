@@ -2,6 +2,10 @@
 
 A Windows system tray application for managing Azure Privileged Identity Management (PIM) requests across multiple tenants.
 
+## AI Acknowledgment
+
+This application has been an experiment with "Vibe" coding and was developed with assistance from [Claude](https://claude.ai), Anthropic's AI assistant. Claude contributed to code implementation, debugging, and documentation throughout the development process.
+
 ## Features
 
 - **Monitor pending approvals** from Entra ID and Azure RBAC in one place
@@ -9,29 +13,51 @@ A Windows system tray application for managing Azure Privileged Identity Managem
 - **Self-activate eligible roles** with custom durations and justifications
 - **Multi-tenant support** with per-tenant configuration and subscription filtering
 - **Desktop notifications** when new requests arrive or activations complete
+- **Auto-update** via Velopack — patch updates apply silently, major/minor updates notify via tray icon and balloon
+- **Token resilience** — survives laptop lock/sleep overnight with automatic re-authentication
 - **Built-in log viewer** for troubleshooting
+- **Auto-exclude empty subscriptions** — subscriptions with no eligible roles are automatically unchecked to reduce API calls
 
 ## Tech Stack
 
-- .NET 8.0 (Windows), WPF + WinForms interop for system tray
+- .NET 10.0 (Windows), WPF + WinForms interop for system tray
 - Azure.Identity with MSAL persistent token caching
 - Microsoft Graph API (v1.0 + beta) for Entra ID PIM
 - Azure Resource Manager API for Azure RBAC PIM
+- Velopack for auto-updates via GitHub Releases
 
 ## Getting Started
 
 ### Prerequisites
 
 - Windows 10/11
-- .NET 8.0 runtime (or SDK to build from source)
+- .NET 10.0 runtime (or SDK to build from source)
 
-### Build & Publish
+### Build & Run
 
 ```bash
-dotnet publish Azure.PIM.Tray --configuration Release --self-contained false
+dotnet build Azure.PIM.Tray/Azure.PIM.Tray.csproj
+dotnet run --project Azure.PIM.Tray/Azure.PIM.Tray.csproj
 ```
 
-This produces `Azure.PIM.Tray-{version}.zip` in `bin/Release/` ready to extract to Program Files.
+### Publish
+
+```bash
+dotnet publish Azure.PIM.Tray/Azure.PIM.Tray.csproj -c Release -r win-x64 --self-contained
+```
+
+### Releasing
+
+Push a version tag to trigger the automated release pipeline:
+
+```bash
+git tag v1.2.0
+git push origin v1.2.0
+```
+
+This runs the GitHub Actions workflow which builds, packages with Velopack, and creates a GitHub Release with update artifacts. Running instances of the app will pick up the update automatically.
+
+You can also trigger a release manually from the **Actions** tab on GitHub.
 
 ### App Registration Setup
 
@@ -43,7 +69,7 @@ The app requires an Entra ID (Azure AD) app registration named **"PIM Request Ma
    - Name: **PIM Request Manager**
    - Supported account types: **Single tenant**
    - Redirect URI: **Public client/native** — `http://localhost`
-2. Launch the app, open **Manage Tenants**, enter your Tenant ID and email, click **Connect & Discover**
+2. Launch the app, open **Settings**, enter your Tenant ID and email, click **Connect & Discover**
 3. Select the tenant in the list and click **Fix Permissions** (requires **Global Administrator**)
 4. The app will automatically add all required API permissions and grant admin consent
 
@@ -74,11 +100,11 @@ The app registration permissions allow the app to *call* the PIM APIs, but the s
 
 #### Verifying Permissions
 
-After setup, select the tenant in **Manage Tenants** and check the **Permissions** column. A green checkmark indicates all permissions are correctly configured. If any are missing, the app will show what's needed.
+After setup, select the tenant in **Settings** and check the **Permissions** column. A green checkmark indicates all permissions are correctly configured. If any are missing, the app will show what's needed.
 
 ### First-Time Setup
 
-1. Launch the app — it starts in the system tray and opens **Manage Tenants**
+1. Launch the app — it starts in the system tray and opens **Settings**
 2. Enter your Tenant ID and email, then click **Connect & Discover**
 3. Sign in via browser when prompted
 4. If permissions are missing, click **Fix Permissions** (requires Global Administrator) or configure them manually as described above
@@ -92,20 +118,23 @@ Repeat for each tenant you want to manage.
 
 Config is stored at `%APPDATA%\PimRequestManager\tray-config.json`. Subscription caches are stored alongside as `subs-{tenantId}.json`.
 
-You can exclude subscriptions from scanning via the Manage Tenants UI to reduce API calls and avoid rate limiting.
+You can exclude subscriptions from scanning via Settings to reduce API calls and avoid rate limiting. Subscriptions with no eligible roles are automatically excluded and can be re-enabled in Settings at any time.
 
 ## Architecture
 
 ```
-App.xaml.cs              Thin shell: startup, shutdown, window launchers
-TrayIconManager          NotifyIcon, balloons, icon generation
+App.xaml.cs              Startup, shutdown, window launchers, session/power event hooks
+TrayIconManager          NotifyIcon, balloons, icon generation (pending/update states)
 RefreshOrchestrator      Background polling, fan-out refresh, new/completed detection
 ContextMenuBuilder       Tray context menu construction
 ActivationWatcher        Activation polling and status notifications
+UpdateService            Auto-update via Velopack (check, download, apply)
 TenantContext            Per-tenant state: pending requests, eligible roles
 PimDataService           Routes to Graph or ARM data services
 ArmPimService            Azure Resource Manager PIM API client
 PimService               Microsoft Graph PIM API client
+SerializedTokenCredential Global gate preventing concurrent browser auth popups
+ConnectionService        Credential factory, config persistence, permission management
 ```
 
 ## Usage
@@ -116,11 +145,9 @@ PimService               Microsoft Graph PIM API client
 | Approve a request | Click a pending request in the menu, or click the balloon notification |
 | Activate a role | Expand "Open Request" in the menu, click a role |
 | View logs | Click "Log Viewer" in the menu |
-| Manage tenants | Click "Manage Tenants" in the menu |
-
-## AI Acknowledgment
-
-This application was developed with assistance from [Claude](https://claude.ai), Anthropic's AI assistant. Claude contributed to architecture design, code implementation, debugging, and documentation throughout the development process.
+| Settings | Click "Settings" in the menu |
+| Check for updates | Click the version link in the Settings window |
+| Apply an update | Click "Update & Restart" in the Settings window |
 
 ## License
 
