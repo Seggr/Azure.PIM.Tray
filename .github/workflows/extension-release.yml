@@ -36,11 +36,18 @@ jobs:
           else
             # Tag format: ext-laps-v1.0.0 → project=Azure.PIM.Tray.Ext.Laps, version=1.0.0
             TAG="${GITHUB_REF_NAME}"
-            # Strip ext- prefix and -vN.N.N suffix to get the short name
-            SHORT=$(echo "$TAG" | sed 's/^ext-//' | sed 's/-v[0-9].*$//')
-            # Convert short name to PascalCase project name
-            PROJECT="Azure.PIM.Tray.Ext.$(echo "$SHORT" | sed 's/\b\(.\)/\u\1/g' | sed 's/-//g')"
-            VERSION=$(echo "$TAG" | grep -oP 'v\K[0-9]+\.[0-9]+\.[0-9]+')
+            # Extract version: strip everything up to and including the last -v
+            VERSION="${TAG##*-v}"
+            # Extract short name: strip ext- prefix and -vVERSION suffix
+            SHORT="${TAG#ext-}"
+            SHORT="${SHORT%-v*}"
+            # Capitalize first letter of each dash-separated segment
+            PASCAL=""
+            IFS='-' read -ra PARTS <<< "$SHORT"
+            for part in "${PARTS[@]}"; do
+              PASCAL="${PASCAL}$(echo "${part:0:1}" | tr '[:lower:]' '[:upper:]')${part:1}"
+            done
+            PROJECT="Azure.PIM.Tray.Ext.${PASCAL}"
             echo "project=$PROJECT" >> "$GITHUB_OUTPUT"
             echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           fi
