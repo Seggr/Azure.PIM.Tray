@@ -1,1 +1,10 @@
-[]
+[
+  {
+    "id": "Azure.PIM.Tray.Ext.Laps",
+    "name": "LAPS Password Retrieval",
+    "description": "Retrieve local admin passwords for Entra-managed devices via Microsoft LAPS",
+    "author": "Jonathan Bland",
+    "version": "1.0.0",
+    "downloadUrl": "https://github.com/Seggr/Azure.PIM.Tray/releases/download/ext-Azure.PIM.Tray.Ext.Laps-v1.0.0/Azure.PIM.Tray.Ext.Laps.dll"
+  }
+]
