@@ -11,6 +11,7 @@ public interface ITenantContext : IAsyncDisposable
     IReadOnlyList<UnifiedPendingRequest> PendingRequests { get; }
     IReadOnlyList<UnifiedEligibleRole> EligibleRoles { get; }
     IReadOnlySet<string> ActiveRoleNames { get; }
+    void MarkRoleActive(string roleName);
     string LastRefreshStatus { get; }
     bool IsCacheExpired { get; }
 

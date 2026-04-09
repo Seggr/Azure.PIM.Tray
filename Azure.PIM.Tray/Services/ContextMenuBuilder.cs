@@ -49,7 +49,7 @@ public sealed class ContextMenuBuilder
     {
         _current?.CloseAll();
 
-        var menu = new TrayMenuWindow();
+        var menu = TrayMenuWindow.GetOrCreate();
         _current = menu;
 
         var tenants = _getTenants();

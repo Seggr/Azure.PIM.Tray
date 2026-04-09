@@ -45,7 +45,7 @@ public sealed class TrayIconManager : IDisposable
         AppLog.EntryAdded += () =>
         {
             var last = AppLog.GetAll().LastOrDefault();
-            if (last is null || last.Level < LogLevel.Warning) return;
+            if (last is null || last.Level < LogLevel.Error) return;
 
             _dispatcher.InvokeAsync(() =>
             {

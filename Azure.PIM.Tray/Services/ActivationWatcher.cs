@@ -58,6 +58,9 @@ public sealed class ActivationWatcher
                 _             => (ToolTipIcon.Info,    $"{roleName}: {status}")
             };
 
+            if (status is "Provisioned" or "Granted")
+                tenant.MarkRoleActive(roleName);
+
             trayIcon.ShowActivationBalloon(msg, icon);
         }
         catch (OperationCanceledException) { /* app shutting down */ }
