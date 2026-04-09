@@ -21,6 +21,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -36,18 +39,21 @@ jobs:
           else
             # Tag format: ext-laps-v1.0.0 → project=Azure.PIM.Tray.Ext.Laps, version=1.0.0
             TAG="${GITHUB_REF_NAME}"
-            # Extract version: strip everything up to and including the last -v
-            VERSION="${TAG##*-v}"
+            echo "Raw tag: $TAG"
+            # Extract version: everything after the last -v
+            VERSION=$(echo "$TAG" | sed 's/.*-v//')
             # Extract short name: strip ext- prefix and -vVERSION suffix
-            SHORT="${TAG#ext-}"
-            SHORT="${SHORT%-v*}"
+            SHORT=$(echo "$TAG" | sed 's/^ext-//' | sed 's/-v[0-9].*//')
+            echo "Short name: $SHORT, Version: $VERSION"
             # Capitalize first letter of each dash-separated segment
             PASCAL=""
             IFS='-' read -ra PARTS <<< "$SHORT"
             for part in "${PARTS[@]}"; do
-              PASCAL="${PASCAL}$(echo "${part:0:1}" | tr '[:lower:]' '[:upper:]')${part:1}"
+              FIRST=$(echo "${part:0:1}" | tr '[:lower:]' '[:upper:]')
+              PASCAL="${PASCAL}${FIRST}${part:1}"
             done
             PROJECT="Azure.PIM.Tray.Ext.${PASCAL}"
+            echo "Project: $PROJECT, Version: $VERSION"
             echo "project=$PROJECT" >> "$GITHUB_OUTPUT"
             echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           fi
@@ -72,3 +78,64 @@ jobs:
           body: "Extension release: ${{ steps.meta.outputs.project }} v${{ steps.meta.outputs.version }}"
           files: |
             dist/${{ steps.meta.outputs.project }}.dll
+
+      - name: Update extension feed
+        shell: bash
+        run: |
+          PROJECT="${{ steps.meta.outputs.project }}"
+          VERSION="${{ steps.meta.outputs.version }}"
+          REPO="${{ github.repository }}"
+          TAG="ext-${PROJECT}-v${VERSION}"
+          DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${TAG}/${PROJECT}.dll"
+          META_FILE="${PROJECT}/extension.json"
+
+          # Read metadata from the extension's extension.json
+          if [ -f "$META_FILE" ]; then
+            ID=$(python -c "import json; print(json.load(open('$META_FILE'))['id'])")
+            NAME=$(python -c "import json; print(json.load(open('$META_FILE'))['name'])")
+            DESC=$(python -c "import json; print(json.load(open('$META_FILE'))['description'])")
+            AUTHOR=$(python -c "import json; print(json.load(open('$META_FILE'))['author'])")
+          else
+            ID="$PROJECT"
+            NAME="$PROJECT"
+            DESC=""
+            AUTHOR=""
+          fi
+
+          # Update feed/extensions.json using Python for reliable JSON manipulation
+          python -c "
+          import json, sys
+          feed_path = 'feed/extensions.json'
+          with open(feed_path) as f:
+              feed = json.load(f)
+
+          # Remove existing entry for this ID
+          feed = [e for e in feed if e.get('id') != '$ID']
+
+          # Add updated entry
+          feed.append({
+              'id': '$ID',
+              'name': '$NAME',
+              'description': '$DESC',
+              'author': '$AUTHOR',
+              'version': '$VERSION',
+              'downloadUrl': '$DOWNLOAD_URL'
+          })
+
+          with open(feed_path, 'w') as f:
+              json.dump(feed, f, indent=2)
+              f.write('\n')
+          "
+
+      - name: Commit feed update
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add feed/extensions.json
+          if git diff --cached --quiet; then
+            echo "No feed changes to commit"
+          else
+            git commit -m "Update extension feed: ${{ steps.meta.outputs.project }} v${{ steps.meta.outputs.version }}"
+            git push origin main
+          fi
