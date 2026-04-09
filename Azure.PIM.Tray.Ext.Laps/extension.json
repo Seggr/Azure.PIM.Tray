@@ -1,0 +1,6 @@
+{
+  "id": "Azure.PIM.Tray.Ext.Laps",
+  "name": "LAPS Password Retrieval",
+  "description": "Retrieve local admin passwords for Entra-managed devices via Microsoft LAPS",
+  "author": "Jonathan Bland"
+}
