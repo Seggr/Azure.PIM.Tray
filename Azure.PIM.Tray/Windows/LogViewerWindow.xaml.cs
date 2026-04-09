@@ -81,6 +81,8 @@ public partial class LogViewerWindow : Window
             && int.TryParse(tag, out var idx))
         {
             AppLog.MinLevel = (LogLevel)idx;
+            var config = ConnectionService.LoadConfig();
+            ConnectionService.SaveConfig(config with { LogLevel = ((LogLevel)idx).ToString() });
         }
     }
 

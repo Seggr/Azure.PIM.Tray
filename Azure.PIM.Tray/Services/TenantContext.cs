@@ -14,6 +14,7 @@ public sealed class TenantContext : ITenantContext
     private volatile IReadOnlyList<UnifiedPendingRequest> _armPending    = [];
     private volatile IReadOnlyList<UnifiedEligibleRole>   _entraEligible;
     private volatile IReadOnlyList<UnifiedEligibleRole>   _armEligible   = [];
+    private volatile HashSet<string>                      _activeRoles   = new(StringComparer.OrdinalIgnoreCase);
 
     private volatile string _lastRefreshStatus = "Not refreshed yet";
 
@@ -25,15 +26,31 @@ public sealed class TenantContext : ITenantContext
 
     public bool IsCacheExpired { get; }
 
-    public IReadOnlyList<UnifiedPendingRequest> PendingRequests =>
-        _entraPending.Count == 0 ? _armPending :
-        _armPending.Count   == 0 ? _entraPending :
-        [.. _entraPending, .. _armPending];
+    public IReadOnlyList<UnifiedPendingRequest> PendingRequests
+    {
+        get
+        {
+            var entra = _entraPending;
+            var arm   = _armPending;
+            return entra.Count == 0 ? arm :
+                   arm.Count   == 0 ? entra :
+                   [.. entra, .. arm];
+        }
+    }
 
-    public IReadOnlyList<UnifiedEligibleRole> EligibleRoles =>
-        _entraEligible.Count == 0 ? _armEligible :
-        _armEligible.Count   == 0 ? _entraEligible :
-        [.. _entraEligible, .. _armEligible];
+    public IReadOnlyList<UnifiedEligibleRole> EligibleRoles
+    {
+        get
+        {
+            var entra = _entraEligible;
+            var arm   = _armEligible;
+            return entra.Count == 0 ? arm :
+                   arm.Count   == 0 ? entra :
+                   [.. entra, .. arm];
+        }
+    }
+
+    public IReadOnlySet<string> ActiveRoleNames => _activeRoles;
 
     public string LastRefreshStatus => _lastRefreshStatus;
 
@@ -172,6 +189,16 @@ public sealed class TenantContext : ITenantContext
 
             var myId = await _svc.GetMyPrincipalIdAsync(ct)
                 ?? throw new InvalidOperationException("Could not resolve user identity.");
+
+            // Fetch active roles for plugin role-gating
+            try
+            {
+                _activeRoles = await _svc.GetActiveRoleNamesAsync(myId, ct);
+            }
+            catch (Exception ex)
+            {
+                AppLog.Warning($"Active Roles ({TenantDisplayName})", $"Failed: {ex.Message}");
+            }
 
             string? entraErr = null, armErr = null;
 

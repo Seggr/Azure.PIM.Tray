@@ -7,6 +7,8 @@ namespace Azure.PIM.Tray.Services;
 
 public sealed class TrayIconManager : IDisposable
 {
+    private const int BalloonTimeoutMs = 8000;
+
     private NotifyIcon?      _notifyIcon;
     private DispatcherTimer? _errorBalloonDebounce;
     private bool             _lastBalloonWasError;
@@ -100,7 +102,7 @@ public sealed class TrayIconManager : IDisposable
         _lastBalloonWasError = false;
         _lastBalloonRequests = newRequests;
         _notifyIcon?.ShowBalloonTip(
-            6000, "PIM Request Manager",
+            BalloonTimeoutMs, "PIM Request Manager",
             $"{newRequests.Count} new PIM request(s) awaiting your approval.",
             ToolTipIcon.Info);
     }
@@ -111,13 +113,13 @@ public sealed class TrayIconManager : IDisposable
         var msg = $"{req.PrincipalName}\u2019s request for \"{req.RoleName}\" [{source}] "
                 + "is no longer pending \u2014 it was approved or completed.";
         _lastBalloonWasError = false;
-        _notifyIcon?.ShowBalloonTip(10_000, "PIM Request Manager \u2014 Request Completed", msg, ToolTipIcon.Info);
+        _notifyIcon?.ShowBalloonTip(BalloonTimeoutMs, "PIM Request Manager \u2014 Request Completed", msg, ToolTipIcon.Info);
     }
 
     public void ShowActivationBalloon(string message, ToolTipIcon icon)
     {
         _lastBalloonWasError = false;
-        _notifyIcon?.ShowBalloonTip(8000, "PIM Request Manager", message, icon);
+        _notifyIcon?.ShowBalloonTip(BalloonTimeoutMs, "PIM Request Manager", message, icon);
     }
 
     private void ShowErrorBalloon()
@@ -128,7 +130,7 @@ public sealed class TrayIconManager : IDisposable
             ? $"{errors} error{(errors == 1 ? "" : "s")} and {warns} warning{(warns == 1 ? "" : "s")}. Click to open Log Viewer."
             : $"{warns} warning{(warns == 1 ? "" : "s")}. Click to open Log Viewer.";
         _lastBalloonWasError = true;
-        _notifyIcon?.ShowBalloonTip(8_000, "PIM Request Manager \u2014 Log", msg, ToolTipIcon.Warning);
+        _notifyIcon?.ShowBalloonTip(BalloonTimeoutMs, "PIM Request Manager \u2014 Log", msg, ToolTipIcon.Warning);
     }
 
     internal static Icon CreateTrayIcon(bool hasPending = false, bool hasUpdate = false)

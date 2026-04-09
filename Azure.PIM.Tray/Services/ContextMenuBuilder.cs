@@ -9,6 +9,7 @@ public sealed class ContextMenuBuilder
     private readonly RefreshOrchestrator            _refreshOrchestrator;
     private readonly ActivationWatcher              _activationWatcher;
     private readonly UpdateService                  _updateService;
+    private readonly PluginLoader                   _pluginLoader;
     private readonly TrayIconManager                _trayIconManager;
     private readonly Action<UnifiedPendingRequest>  _openApprovalWindow;
     private readonly Action<UnifiedEligibleRole>    _openActivateWindow;
@@ -23,6 +24,7 @@ public sealed class ContextMenuBuilder
         RefreshOrchestrator            refreshOrchestrator,
         ActivationWatcher              activationWatcher,
         UpdateService                  updateService,
+        PluginLoader                   pluginLoader,
         TrayIconManager                trayIconManager,
         Action<UnifiedPendingRequest>  openApprovalWindow,
         Action<UnifiedEligibleRole>    openActivateWindow,
@@ -34,6 +36,7 @@ public sealed class ContextMenuBuilder
         _refreshOrchestrator = refreshOrchestrator;
         _activationWatcher   = activationWatcher;
         _updateService       = updateService;
+        _pluginLoader        = pluginLoader;
         _trayIconManager     = trayIconManager;
         _openApprovalWindow  = openApprovalWindow;
         _openActivateWindow  = openActivateWindow;
@@ -72,6 +75,39 @@ public sealed class ContextMenuBuilder
         if (isRefreshing) eligibleLabel += "  (refreshing\u2026)";
         menu.AddItem(eligibleLabel, hasSubmenu: true,
             buildSubmenu: sub => BuildEligibleItems(sub, tenants, isRefreshing));
+
+        // Plugin menu items
+        foreach (var plugin in _pluginLoader.Plugins)
+        {
+            foreach (var tenant in tenants)
+            {
+                // Skip if disabled for this tenant in config
+                var pluginId = plugin.Id;
+                if (tenant.Connection.DisabledExtensions.Contains(pluginId, StringComparer.OrdinalIgnoreCase))
+                    continue;
+
+                // Skip if plugin determined it's not available for this tenant (e.g. no LAPS)
+                if (!plugin.IsAvailable(tenant.TenantId))
+                    continue;
+
+                // Check if the user has the required roles active
+                if (plugin.RequiredRoles.Count > 0)
+                {
+                    var hasRole = plugin.RequiredRoles.Any(r => tenant.ActiveRoleNames.Contains(r));
+
+                    if (!hasRole)
+                    {
+                        var roleList = string.Join(" / ", plugin.RequiredRoles);
+                        menu.AddItem($"{plugin.Name} ({tenant.TenantDisplayName}) \u2014 requires {roleList}",
+                            isDisabled: true, foreground: "#999999");
+                        continue;
+                    }
+                }
+
+                var adapter = new PluginMenuAdapter(menu, _trayIconManager);
+                plugin.BuildMenu(adapter, tenant.TenantId);
+            }
+        }
 
         menu.AddSeparator();
 
@@ -162,13 +198,14 @@ public sealed class ContextMenuBuilder
             }
             else
             {
-                AddSourceGroup(sub, "Entra ID", entraRoles);
-                AddSourceGroup(sub, "Azure RBAC", rbacRoles);
+                AddSourceGroup(sub, "Entra ID", entraRoles, tenant.ActiveRoleNames);
+                AddSourceGroup(sub, "Azure RBAC", rbacRoles, tenant.ActiveRoleNames);
             }
         }
     }
 
-    private void AddSourceGroup(TrayMenuWindow sub, string sourceLabel, List<UnifiedEligibleRole> roles)
+    private void AddSourceGroup(TrayMenuWindow sub, string sourceLabel,
+        List<UnifiedEligibleRole> roles, IReadOnlySet<string> activeRoles)
     {
         if (roles.Count == 0) return;
         sub.AddItem($"   \u2014 {sourceLabel} \u2014", isDisabled: true, foreground: "#999999");
@@ -176,11 +213,21 @@ public sealed class ContextMenuBuilder
         foreach (var role in roles)
         {
             var cap = role;
+            var isActive = activeRoles.Contains(role.RoleName);
             var watched = _activationWatcher.IsRoleWatched(role);
-            var label = watched
-                ? $"   {role.RoleName}  ({role.ScopeDisplayName})  \u23f3"
-                : $"   {role.RoleName}  ({role.ScopeDisplayName})";
-            sub.AddItem(label, onClick: () => _openActivateWindow(cap));
+
+            if (isActive)
+            {
+                sub.AddItem($"   {role.RoleName}  ({role.ScopeDisplayName})  \u2713 active",
+                    isDisabled: true, foreground: "#999999");
+            }
+            else
+            {
+                var label = watched
+                    ? $"   {role.RoleName}  ({role.ScopeDisplayName})  \u23f3"
+                    : $"   {role.RoleName}  ({role.ScopeDisplayName})";
+                sub.AddItem(label, onClick: () => _openActivateWindow(cap));
+            }
         }
     }
 }

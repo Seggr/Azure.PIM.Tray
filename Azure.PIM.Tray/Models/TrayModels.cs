@@ -13,12 +13,15 @@ public record TrayConnection
     public string?         ClientId            { get; init; }
     public string?         TenantDisplayName   { get; init; }
     public List<string>    ExcludedSubscriptions { get; init; } = [];
+    public List<string>    DisabledExtensions    { get; init; } = [];
 }
 
 public record TrayAppConfig
 {
     public List<TrayConnection> Connections { get; init; } = [];
     public bool LogToDisk { get; init; }
+    public string? LogLevel { get; init; }
+    public List<string>? ExtensionFeeds { get; init; }
 }
 
 // ---------------------------------------------------------------------------

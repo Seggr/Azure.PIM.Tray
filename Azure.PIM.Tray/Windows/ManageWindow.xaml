@@ -16,6 +16,7 @@
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
         <TreeView Grid.Row="0" x:Name="TenantTree" Margin="0,0,0,8"
@@ -99,7 +100,34 @@
             </Border>
         </Expander>
 
-        <Grid Grid.Row="2">
+        <Expander Grid.Row="2" x:Name="ExpanderExtensions"
+                  Header="Extensions"
+                  IsExpanded="False"
+                  Margin="0,0,0,8">
+            <Border BorderBrush="#DDD" BorderThickness="1" CornerRadius="4" Padding="10" Margin="0,6,0,0">
+                <StackPanel>
+                    <TextBlock Text="Installed" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                    <ItemsControl x:Name="InstalledExtensionsList"/>
+                    <TextBlock x:Name="TxtNoInstalled"
+                               Text="(none)" Foreground="#999" FontSize="11" Margin="0,0,0,8"/>
+
+                    <Separator Margin="0,4,0,8"/>
+
+                    <TextBlock Text="Available" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                    <ItemsControl x:Name="ExtensionsList"/>
+                    <TextBlock x:Name="TxtExtensionsStatus"
+                               Foreground="#666" FontSize="11" Margin="0,4"
+                               Text="Click Refresh to load available extensions"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                        <Button x:Name="BtnRefreshExtensions"
+                                Content="Refresh"
+                                Padding="10,4" Click="RefreshExtensions_Click"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Expander>
+
+        <Grid Grid.Row="3">
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Left">
                 <TextBlock x:Name="TxtVersion"
                            VerticalAlignment="Center"
@@ -143,8 +171,15 @@
                 <Button x:Name="BtnSignIn"
                         Content="Sign In selected"
                         Margin="0,0,8,0" Padding="12,5"
-                        ToolTip="Opens a browser to sign in and populate the token cache for the selected tenant."
-                        Click="SignIn_Click"/>
+                        ToolTip="Opens a browser to sign in and populate the token cache for the selected tenant. Right-click to force a fresh token."
+                        Click="SignIn_Click">
+                    <Button.ContextMenu>
+                        <ContextMenu>
+                            <MenuItem Header="Reload Token" Click="ReloadToken_Click"
+                                      ToolTip="Clears the cached token and acquires a fresh one via browser sign-in"/>
+                        </ContextMenu>
+                    </Button.ContextMenu>
+                </Button>
                 <Button x:Name="BtnRemoveSelected"
                         Content="Remove selected"
                         Margin="0,0,8,0" Padding="12,5"

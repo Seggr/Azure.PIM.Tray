@@ -13,11 +13,13 @@ public partial class App : System.Windows.Application
     private List<ITenantContext> _tenants = [];
     private TrayAppConfig       _config  = new();
 
-    private TrayIconManager?     _trayIcon;
-    private RefreshOrchestrator? _refresher;
-    private ActivationWatcher?   _watcher;
-    private UpdateService?       _updateService;
-    private ContextMenuBuilder?  _contextMenu;
+    private TrayIconManager?      _trayIcon;
+    private RefreshOrchestrator?  _refresher;
+    private ActivationWatcher?    _watcher;
+    private UpdateService?        _updateService;
+    private PluginLoader?         _pluginLoader;
+    private ExtensionFeedService? _feedService;
+    private ContextMenuBuilder?   _contextMenu;
 
     private LogViewerWindow? _logViewerWindow;
     private ManageWindow?    _manageWindow;
@@ -38,6 +40,8 @@ public partial class App : System.Windows.Application
 
         _config = ConnectionService.LoadConfig();
         AppLog.LogToDisk = _config.LogToDisk;
+        AppLog.MinLevel = Enum.TryParse<LogLevel>(_config.LogLevel, true, out var level)
+            ? level : LogLevel.Warning;
         BuildServicesInitial();
 
         // Tray icon
@@ -54,12 +58,18 @@ public partial class App : System.Windows.Application
         // Auto-updater
         _updateService = new UpdateService();
 
+        // Plugins
+        _pluginLoader = new PluginLoader();
+        _pluginLoader.DiscoverPlugins();
+        _feedService = new ExtensionFeedService();
+
         // Context menu
         _contextMenu = new ContextMenuBuilder(
             () => _tenants,
             _refresher,
             _watcher,
             _updateService,
+            _pluginLoader,
             _trayIcon,
             OpenApprovalWindow,
             OpenActivateWindow,
@@ -90,6 +100,7 @@ public partial class App : System.Windows.Application
         if (AppLog.LogToDisk)
             AppLog.Info("App", $"Disk log: {AppLog.LogFilePath}");
         _ = _refresher.RefreshAsync();
+        _ = _pluginLoader.InitializeAsync(_tenants, _appCts.Token);
 
         if (_config.Connections.Count == 0)
             OpenManageWindow();
@@ -101,6 +112,9 @@ public partial class App : System.Windows.Application
         // If an update was downloaded, apply it after the process exits
         _updateService?.ApplyUpdateOnExit();
         _updateService?.Dispose();
+        if (_pluginLoader is not null)
+            _ = _pluginLoader.DisposeAsync();
+        _feedService?.Dispose();
         Microsoft.Win32.SystemEvents.SessionSwitch    -= OnSessionSwitch;
         Microsoft.Win32.SystemEvents.PowerModeChanged -= OnPowerModeChanged;
         _appCts.Cancel();
@@ -196,7 +210,7 @@ public partial class App : System.Windows.Application
         {
             if (_logViewerWindow is not null)
             {
-                _logViewerWindow.Activate();
+                WindowIconHelper.BringToForeground(_logViewerWindow);
                 return;
             }
 
@@ -221,11 +235,11 @@ public partial class App : System.Windows.Application
         {
             if (_manageWindow is not null)
             {
-                _manageWindow.Activate();
+                WindowIconHelper.BringToForeground(_manageWindow);
                 return;
             }
 
-            var win = new ManageWindow(_config, _updateService);
+            var win = new ManageWindow(_config, _updateService, _feedService, _pluginLoader);
             win.ConfigChanged += async (_, _) =>
             {
                 _config = ConnectionService.LoadConfig();

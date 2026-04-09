@@ -26,6 +26,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Azure.PIM.Tray.Extensibility\Azure.PIM.Tray.Extensibility.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Resource Include="Assets\tray.ico" />
   </ItemGroup>
 

@@ -32,7 +32,8 @@ internal static class ConnectionService
         "User.Read",
         "RoleAssignmentSchedule.ReadWrite.Directory",
         "RoleEligibilitySchedule.Read.Directory",
-        "PrivilegedAccess.ReadWrite.AzureAD"
+        "PrivilegedAccess.ReadWrite.AzureAD",
+        "RoleManagement.Read.Directory"
     ];
 
     // ------------------------------------------------------------------
@@ -273,12 +274,46 @@ internal static class ConnectionService
             new TokenRequestContext(["https://graph.microsoft.com/.default"]), ct);
     }
 
+    /// <summary>
+    /// Forces a fresh interactive sign-in for both Graph and ARM scopes,
+    /// ensuring the token cache is populated with tokens that include all
+    /// currently consented permissions.
+    /// </summary>
+    public static async Task ReloadTokensAsync(TrayConnection connection, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(connection.ClientId))
+            throw new InvalidOperationException("Connection has no ClientId.");
+
+        var cacheName = $"PimRequestManager_{connection.ClientId}_{connection.TenantId}";
+        var cacheOpts = new TokenCachePersistenceOptions { Name = cacheName };
+
+        var cred = new InteractiveBrowserCredential(new InteractiveBrowserCredentialOptions
+        {
+            ClientId                     = connection.ClientId,
+            TenantId                     = connection.TenantId,
+            LoginHint                    = connection.Email,
+            TokenCachePersistenceOptions = cacheOpts
+        });
+
+        AppLog.Info("Auth", $"Reloading Graph token for {connection.Email}...");
+        await cred.GetTokenAsync(
+            new TokenRequestContext(["https://graph.microsoft.com/.default"]), ct);
+
+        AppLog.Info("Auth", $"Reloading ARM token for {connection.Email}...");
+        await cred.GetTokenAsync(
+            new TokenRequestContext(["https://management.azure.com/.default"]), ct);
+
+        AppLog.Info("Auth", $"Token reload complete for {connection.Email}");
+    }
+
     // ------------------------------------------------------------------
     // Permission check
     // ------------------------------------------------------------------
 
     public static async Task<string> CheckPermissionsAsync(
-        TrayConnection connection, CancellationToken ct = default)
+        TrayConnection connection, IReadOnlyList<string>? additionalGraphScopes = null,
+        IReadOnlyDictionary<string, string>? additionalScopeIds = null,
+        CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(connection.ClientId))
             return "No app registered";
@@ -353,8 +388,18 @@ internal static class ConnectionService
             }
         }
 
-        var missingRegistration = RequiredGraphScopes
-            .Where(name => nameToId.TryGetValue(name, out var id) && !registeredIds.Contains(id))
+        var allCheckScopes = additionalGraphScopes is { Count: > 0 }
+            ? RequiredGraphScopes.Concat(additionalGraphScopes).Distinct(StringComparer.OrdinalIgnoreCase).ToArray()
+            : RequiredGraphScopes;
+
+        var missingRegistration = allCheckScopes
+            .Where(name =>
+            {
+                var id = nameToId.TryGetValue(name, out var sid) ? sid
+                       : additionalScopeIds is not null && additionalScopeIds.TryGetValue(name, out var pId) ? pId
+                       : null;
+                return id is not null && !registeredIds.Contains(id);
+            })
             .ToList();
 
         var spFilter   = Uri.EscapeDataString($"appId eq '{connection.ClientId}'");
@@ -389,7 +434,7 @@ internal static class ConnectionService
             }
         }
 
-        var missingConsent = RequiredGraphScopes
+        var missingConsent = allCheckScopes
             .Where(name => !grantedScopes.Contains(name))
             .ToList();
 
@@ -412,7 +457,9 @@ internal static class ConnectionService
     // ------------------------------------------------------------------
 
     public static async Task<string> FixPermissionsAsync(
-        TrayConnection connection, CancellationToken ct = default)
+        TrayConnection connection, IReadOnlyList<string>? additionalGraphScopes = null,
+        IReadOnlyDictionary<string, string>? additionalScopeIds = null,
+        CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(connection.ClientId))
             return "No app registered";
@@ -478,10 +525,23 @@ internal static class ConnectionService
         }
 
         // Build exact required permissions — replaces everything (removes stale/legacy)
+        var allScopes = additionalGraphScopes is { Count: > 0 }
+            ? RequiredGraphScopes.Concat(additionalGraphScopes).Distinct(StringComparer.OrdinalIgnoreCase)
+            : RequiredGraphScopes.AsEnumerable();
+        AppLog.Debug("FixPermissions", $"Graph SP has {nameToId.Count} delegated scopes available");
         var graphAccess = new List<(string Id, string Type)>();
-        foreach (var name in RequiredGraphScopes)
+        foreach (var name in allScopes)
+        {
             if (nameToId.TryGetValue(name, out var sid))
                 graphAccess.Add((sid, "Scope"));
+            else if (additionalScopeIds is not null && additionalScopeIds.TryGetValue(name, out var pluginId))
+            {
+                graphAccess.Add((pluginId, "Scope"));
+                AppLog.Info("FixPermissions", $"Scope '{name}' not in Graph SP \u2014 using plugin-supplied ID {pluginId}");
+            }
+            else
+                AppLog.Warning("FixPermissions", $"Scope '{name}' not found \u2014 skipped");
+        }
 
         static JsonObject MakeRra(string appId, IEnumerable<(string Id, string Type)> items) => new()
         {
@@ -522,7 +582,7 @@ internal static class ConnectionService
             return "Permissions registered — app service principal not found; grant consent in Azure Portal";
         var appSpId = appSpArr[0]!["id"]!.GetValue<string>();
 
-        var graphScopes = string.Join(" ", RequiredGraphScopes);
+        var graphScopes = string.Join(" ", allScopes);
         AppLog.Info("FixPermissions", $"Setting Graph consent to: {graphScopes}");
         await GrantAdminConsentAsync(http, appSpId, graphSpId, graphScopes, ct);
         if (armSpId is not null)
