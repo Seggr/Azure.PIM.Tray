@@ -37,6 +37,7 @@ internal sealed class PimService : IAsyncDisposable
     public async Task<List<RoleAssignmentScheduleRequest>> GetPendingRequestsAsync(
         CancellationToken ct = default)
     {
+        // Requires: PrivilegedAccess.ReadWrite.AzureAD — list pending Entra ID approval requests
         var url = GraphBase
             + "/roleManagement/directory/roleAssignmentScheduleRequests"
             + "?$filter=status eq 'PendingApproval'"
@@ -73,6 +74,7 @@ internal sealed class PimService : IAsyncDisposable
     public async Task<Approval?> GetApprovalAsync(
         string approvalId, string namespacePath, CancellationToken ct = default)
     {
+        // Requires: PrivilegedAccess.ReadWrite.AzureAD — retrieve approval details and steps
         var url = $"{GraphBaseBeta}/roleManagement/{namespacePath}/roleAssignmentApprovals/{approvalId}?$expand=steps";
         return await GetAsync<Approval>(url, GraphAudience, ct);
     }
@@ -81,6 +83,7 @@ internal sealed class PimService : IAsyncDisposable
         string approvalId, string stepId, string justification,
         string namespacePath, CancellationToken ct = default)
     {
+        // Requires: PrivilegedAccess.ReadWrite.AzureAD — approve a pending request step
         var url = $"{GraphBaseBeta}/roleManagement/{namespacePath}/roleAssignmentApprovals/{approvalId}/steps/{stepId}";
         return await PatchAsync(url, GraphAudience,
             new { reviewResult = "Approve", justification }, ct);

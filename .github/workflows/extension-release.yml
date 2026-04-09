@@ -1,0 +1,67 @@
+name: Extension Release
+
+on:
+  push:
+    tags: ['ext-*']
+  workflow_dispatch:
+    inputs:
+      project:
+        description: 'Extension project name (e.g. Azure.PIM.Tray.Ext.Laps)'
+        required: true
+      version:
+        description: 'Version (e.g. 1.0.0)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Parse tag
+        id: meta
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "project=${{ github.event.inputs.project }}" >> "$GITHUB_OUTPUT"
+            echo "version=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            # Tag format: ext-laps-v1.0.0 → project=Azure.PIM.Tray.Ext.Laps, version=1.0.0
+            TAG="${GITHUB_REF_NAME}"
+            # Strip ext- prefix and -vN.N.N suffix to get the short name
+            SHORT=$(echo "$TAG" | sed 's/^ext-//' | sed 's/-v[0-9].*$//')
+            # Convert short name to PascalCase project name
+            PROJECT="Azure.PIM.Tray.Ext.$(echo "$SHORT" | sed 's/\b\(.\)/\u\1/g' | sed 's/-//g')"
+            VERSION=$(echo "$TAG" | grep -oP 'v\K[0-9]+\.[0-9]+\.[0-9]+')
+            echo "project=$PROJECT" >> "$GITHUB_OUTPUT"
+            echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build extension
+        run: >
+          dotnet build ${{ steps.meta.outputs.project }}/${{ steps.meta.outputs.project }}.csproj
+          -c Release
+          -p:Version=${{ steps.meta.outputs.version }}
+
+      - name: Collect DLL
+        shell: bash
+        run: |
+          mkdir -p dist
+          cp ${{ steps.meta.outputs.project }}/bin/Release/net10.0/${{ steps.meta.outputs.project }}.dll dist/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ext-${{ steps.meta.outputs.project }}-v${{ steps.meta.outputs.version }}
+          name: "${{ steps.meta.outputs.project }} v${{ steps.meta.outputs.version }}"
+          body: "Extension release: ${{ steps.meta.outputs.project }} v${{ steps.meta.outputs.version }}"
+          files: |
+            dist/${{ steps.meta.outputs.project }}.dll

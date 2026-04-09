@@ -65,6 +65,62 @@ public partial class TrayMenuWindow : Window
 
     public StackPanel Items => MenuPanel;
 
+    /// <summary>
+    /// Adds a search text box pinned at the current position in the menu.
+    /// <paramref name="onTextChanged"/> fires on each keystroke with the current text.
+    /// </summary>
+    public void AddSearchBox(string placeholder, Action<string> onTextChanged)
+    {
+        var tb = new System.Windows.Controls.TextBox
+        {
+            Margin = new Thickness(8, 4, 8, 4),
+            Padding = new Thickness(4, 3, 4, 3),
+            FontSize = 12,
+            FontFamily = new FontFamily("Segoe UI"),
+        };
+
+        // Placeholder text via a visual hint
+        var placeholderBlock = new TextBlock
+        {
+            Text = placeholder,
+            Foreground = Brushes.Gray,
+            FontSize = 12,
+            FontFamily = new FontFamily("Segoe UI"),
+            IsHitTestVisible = false,
+            Margin = new Thickness(13, 7, 0, 0),
+            Visibility = Visibility.Visible
+        };
+
+        var container = new System.Windows.Controls.Grid();
+        container.Children.Add(tb);
+        container.Children.Add(placeholderBlock);
+
+        tb.TextChanged += (_, _) =>
+        {
+            placeholderBlock.Visibility = string.IsNullOrEmpty(tb.Text)
+                ? Visibility.Visible : Visibility.Collapsed;
+            onTextChanged(tb.Text);
+        };
+
+        tb.GotFocus += (_, _) =>
+        {
+            if (string.IsNullOrEmpty(tb.Text))
+                placeholderBlock.Visibility = Visibility.Collapsed;
+        };
+
+        tb.LostFocus += (_, _) =>
+        {
+            if (string.IsNullOrEmpty(tb.Text))
+                placeholderBlock.Visibility = Visibility.Visible;
+        };
+
+        MenuPanel.Children.Add(container);
+
+        // Focus the search box once the window is visible
+        Dispatcher.InvokeAsync(() => tb.Focus(),
+            System.Windows.Threading.DispatcherPriority.Input);
+    }
+
     public void AddItem(string text, Action? onClick = null, bool isHeader = false,
         bool isDisabled = false, string? foreground = null, bool isBold = false,
         bool hasSubmenu = false, Action<TrayMenuWindow>? buildSubmenu = null)

@@ -11,11 +11,13 @@ This application has been an experiment with "Vibe" coding and was developed wit
 - **Monitor pending approvals** from Entra ID and Azure RBAC in one place
 - **Approve requests** directly from desktop notifications or the tray menu
 - **Self-activate eligible roles** with custom durations and justifications
+- **Active role detection** — roles already active are grayed out to prevent duplicate requests
 - **Multi-tenant support** with per-tenant configuration and subscription filtering
 - **Desktop notifications** when new requests arrive or activations complete
-- **Auto-update** via Velopack — patch updates apply silently, major/minor updates notify via tray icon and balloon
+- **Auto-update** via Velopack — patch updates apply silently on exit, major/minor updates notify via tray icon
 - **Token resilience** — survives laptop lock/sleep overnight with automatic re-authentication
-- **Built-in log viewer** for troubleshooting
+- **Extension system** — install plugins from a feed, with per-tenant enable/disable and automatic permission management
+- **Built-in log viewer** with configurable log level (persisted across restarts)
 - **Auto-exclude empty subscriptions** — subscriptions with no eligible roles are automatically unchecked to reduce API calls
 
 ## Tech Stack
@@ -59,6 +61,19 @@ This runs the GitHub Actions workflow which builds, packages with Velopack, and 
 
 You can also trigger a release manually from the **Actions** tab on GitHub.
 
+### Releasing an Extension
+
+Push an extension tag to build and publish a plugin DLL:
+
+```bash
+git tag ext-laps-v1.0.0
+git push origin ext-laps-v1.0.0
+```
+
+This runs the extension release workflow which builds the plugin, and creates a GitHub Release with the DLL attached. Users can install it from **Settings > Extensions > Refresh > Install**, or manually drop the DLL into the `plugins/` folder.
+
+You can also trigger it manually from the **Actions** tab with a project name and version.
+
 ### App Registration Setup
 
 The app requires an Entra ID (Azure AD) app registration named **"PIM Request Manager"** in each tenant you want to manage. You can create this manually or let the app's **Fix Permissions** button configure it for you.
@@ -71,25 +86,31 @@ The app requires an Entra ID (Azure AD) app registration named **"PIM Request Ma
    - Redirect URI: **Public client/native** — `http://localhost`
 2. Launch the app, open **Settings**, enter your Tenant ID and email, click **Connect & Discover**
 3. Select the tenant in the list and click **Fix Permissions** (requires **Global Administrator**)
-4. The app will automatically add all required API permissions and grant admin consent
+4. The app will automatically add all required API permissions (including those from enabled extensions) and grant admin consent
 
 #### Option B: Manual
 
 1. Create the app registration as above
 2. Under **API permissions**, add the following **Delegated** permissions:
 
-   **Microsoft Graph:**
+   **Microsoft Graph (core):**
    | Permission | Purpose |
    |------------|---------|
-   | `User.Read` | Identify the signed-in user |
-   | `RoleAssignmentSchedule.ReadWrite.Directory` | Read/write Entra ID PIM role assignments |
-   | `RoleEligibilitySchedule.Read.Directory` | Read Entra ID role eligibility schedules |
-   | `PrivilegedAccess.ReadWrite.AzureAD` | Approve Entra ID PIM requests |
+   | `User.Read` | Resolve the signed-in user's principal ID via `/me` |
+   | `RoleAssignmentSchedule.ReadWrite.Directory` | Submit self-activation requests for Entra ID roles |
+   | `RoleEligibilitySchedule.Read.Directory` | List eligible and currently active Entra ID role assignments |
+   | `PrivilegedAccess.ReadWrite.AzureAD` | List pending approvals, retrieve approval details, and approve Entra ID PIM requests |
+   | `RoleManagement.Read.Directory` | Read PIM policies to check if approval is required, and poll activation request status |
+
+   **Microsoft Graph (LAPS extension):**
+   | Permission | Purpose |
+   |------------|---------|
+   | `DeviceLocalCredential.Read.All` | List LAPS-managed devices and retrieve local admin passwords (added automatically when the LAPS extension is installed and enabled) |
 
    **Azure Service Management:**
    | Permission | Purpose |
    |------------|---------|
-   | `user_impersonation` | Access ARM APIs for Azure RBAC PIM |
+   | `user_impersonation` | All Azure RBAC PIM operations: list subscriptions, list eligible roles, submit activations, list/approve pending requests, read policies, and poll status |
 
 3. Click **Grant admin consent** for all permissions
 4. Under **Authentication**, ensure **Allow public client flows** is set to **Yes**
@@ -100,7 +121,7 @@ The app registration permissions allow the app to *call* the PIM APIs, but the s
 
 #### Verifying Permissions
 
-After setup, select the tenant in **Settings** and check the **Permissions** column. A green checkmark indicates all permissions are correctly configured. If any are missing, the app will show what's needed.
+After setup, select the tenant in **Settings** and check the **Permissions** column. A green checkmark indicates all permissions are correctly configured (including those required by enabled extensions). If any are missing, the app will show what's needed.
 
 ### First-Time Setup
 
@@ -114,27 +135,75 @@ After setup, select the tenant in **Settings** and check the **Permissions** col
 
 Repeat for each tenant you want to manage.
 
+## Extensions
+
+The app supports a plugin system for adding optional features. Extensions are distributed as single DLL files and installed via the Settings window or by dropping them into the `plugins/` folder.
+
+### Installing Extensions
+
+1. Open **Settings** > expand **Extensions**
+2. Click **Refresh** to load available extensions from the feed
+3. Click **Install** next to the extension you want
+4. Restart the app
+
+### Managing Extensions
+
+- **Per-tenant enable/disable** — each installed extension shows checkboxes per tenant in Settings
+- **Permission management** — click **Grant Permissions** on an extension to register its required API scopes
+- **Required roles** — extensions that require specific Entra ID roles (e.g. "Cloud Device Administrator" for LAPS) are grayed out in the tray menu when the role isn't active
+
+### Available Extensions
+
+| Extension | Description | Required Role |
+|-----------|-------------|---------------|
+| LAPS Passwords | Retrieve local admin passwords for Entra-managed devices via Microsoft LAPS | Cloud Device Administrator |
+
+### Building Extensions
+
+Extensions implement `ITrayPlugin` from the `Azure.PIM.Tray.Extensibility` contract library. See `Azure.PIM.Tray.Ext.Laps` for a reference implementation.
+
+### Extension Feed
+
+The default feed is hosted at `feed/extensions.json` in this repository. Custom feeds can be configured in `tray-config.json` via the `extensionFeeds` array.
+
 ## Configuration
 
 Config is stored at `%APPDATA%\PimRequestManager\tray-config.json`. Subscription caches are stored alongside as `subs-{tenantId}.json`.
 
-You can exclude subscriptions from scanning via Settings to reduce API calls and avoid rate limiting. Subscriptions with no eligible roles are automatically excluded and can be re-enabled in Settings at any time.
+Key settings:
+- **Subscriptions** — exclude subscriptions from scanning via Settings to reduce API calls. Subscriptions with no eligible roles are automatically excluded.
+- **Log level** — configurable in the Log Viewer (Debug, Info, Warning, Error). Defaults to Warning. Persisted across restarts.
+- **Log to disk** — toggle in the Log Viewer. Logs to `%LOCALAPPDATA%\Azure.PIM.Tray\logs\`.
+- **Extension feeds** — custom feed URLs can be added to the `extensionFeeds` array in the config file.
+- **Disabled extensions** — per-tenant extension toggles are stored in each connection's `disabledExtensions` array.
 
 ## Architecture
 
 ```
-App.xaml.cs              Startup, shutdown, window launchers, session/power event hooks
-TrayIconManager          NotifyIcon, balloons, icon generation (pending/update states)
-RefreshOrchestrator      Background polling, fan-out refresh, new/completed detection
-ContextMenuBuilder       Tray context menu construction
-ActivationWatcher        Activation polling and status notifications
-UpdateService            Auto-update via Velopack (check, download, apply)
-TenantContext            Per-tenant state: pending requests, eligible roles
-PimDataService           Routes to Graph or ARM data services
-ArmPimService            Azure Resource Manager PIM API client
-PimService               Microsoft Graph PIM API client
-SerializedTokenCredential Global gate preventing concurrent browser auth popups
-ConnectionService        Credential factory, config persistence, permission management
+Azure.PIM.Tray/                Main application
+  App.xaml.cs                  Startup, shutdown, window launchers, session/power event hooks
+  TrayIconManager              NotifyIcon, balloons, icon generation (pending/update states)
+  RefreshOrchestrator          Background polling, fan-out refresh, new/completed detection
+  ContextMenuBuilder           Tray context menu construction with plugin integration
+  ActivationWatcher            Activation polling and status notifications
+  UpdateService                Auto-update via Velopack (check, download, apply)
+  PluginLoader                 Plugin discovery, initialization, and lifecycle
+  ExtensionFeedService         Feed fetching, extension install/remove
+  PluginMenuAdapter            Bridges IPluginMenuBuilder to TrayMenuWindow (WPF isolation)
+  TenantContext                Per-tenant state: pending requests, eligible roles, active roles
+  PimDataService               Routes to Graph or ARM data services
+  ArmPimService                Azure Resource Manager PIM API client
+  PimService                   Microsoft Graph PIM API client
+  SerializedTokenCredential    Global gate preventing concurrent browser auth popups
+  ConnectionService            Credential factory, config persistence, permission management
+
+Azure.PIM.Tray.Extensibility/  Plugin contract library
+  ITrayPlugin                  Plugin interface (Id, Name, permissions, roles, menu building)
+  IPluginMenuBuilder           Menu abstraction (items, search boxes, submenus, clipboard)
+  PluginTenantContext          Credentials, identity, and logging for plugins
+
+Azure.PIM.Tray.Ext.Laps/      LAPS password retrieval plugin
+  LapsPlugin                   Lists LAPS devices, retrieves passwords, auto-detects availability
 ```
 
 ## Usage
@@ -148,6 +217,9 @@ ConnectionService        Credential factory, config persistence, permission mana
 | Settings | Click "Settings" in the menu |
 | Check for updates | Click the version link in the Settings window |
 | Apply an update | Click "Update & Restart" in the Settings window |
+| Install extensions | Settings > Extensions > Refresh > Install |
+| Enable/disable extension per tenant | Settings > Extensions > Installed > check/uncheck tenant |
+| Reload tokens | Right-click "Sign In" > Reload Token |
 
 ## License
 

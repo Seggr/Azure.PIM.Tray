@@ -80,6 +80,7 @@ internal sealed class GraphPimDataService : IAsyncDisposable
 
     public async Task<string?> GetMyPrincipalIdAsync(CancellationToken ct = default)
     {
+        // Requires: User.Read — resolve the signed-in user's principal ID
         if (_myPrincipalId is not null) return _myPrincipalId;
         try
         {
@@ -102,12 +103,40 @@ internal sealed class GraphPimDataService : IAsyncDisposable
     }
 
     // ------------------------------------------------------------------
+    // Active roles
+    // ------------------------------------------------------------------
+
+    public async Task<HashSet<string>> GetActiveRoleNamesAsync(
+        string myId, CancellationToken ct = default)
+    {
+        // Requires: RoleEligibilitySchedule.Read.Directory — list currently active Entra ID role assignments
+        var token  = await GetGraphTokenAsync(ct);
+        var filter = Uri.EscapeDataString($"principalId eq '{myId}'");
+        var url    = $"{GraphBase}/roleManagement/directory/roleAssignmentScheduleInstances"
+                   + $"?$filter={filter}&$expand=roleDefinition&$select=id,roleDefinition";
+
+        var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var page   = await GraphGetAsync<ODataCollection<EntraEligibilitySchedule>>(token, url, ct);
+
+        foreach (var s in page?.Value ?? [])
+        {
+            if (s.RoleDefinition?.DisplayName is not null)
+                result.Add(s.RoleDefinition.DisplayName);
+        }
+
+        AppLog.Info($"Active Roles ({TenantDisplayName})",
+            $"{result.Count} active role(s) for {Email}: {string.Join(", ", result)}");
+        return result;
+    }
+
+    // ------------------------------------------------------------------
     // Eligible roles
     // ------------------------------------------------------------------
 
     public async Task<List<UnifiedEligibleRole>> GetEntraEligibleRolesAsync(
         string myId, CancellationToken ct = default)
     {
+        // Requires: RoleEligibilitySchedule.Read.Directory — list eligible Entra ID roles
         var result = new List<UnifiedEligibleRole>();
         var token  = await GetGraphTokenAsync(ct);
         var filter = Uri.EscapeDataString($"principalId eq '{myId}'");
@@ -219,6 +248,7 @@ internal sealed class GraphPimDataService : IAsyncDisposable
     public async Task<(bool Success, string Message, string? PollUrl)> ActivateRoleAsync(
         UnifiedEligibleRole role, TimeSpan duration, string justification, CancellationToken ct)
     {
+        // Requires: RoleAssignmentSchedule.ReadWrite.Directory — submit self-activation requests
         var myId = await GetMyPrincipalIdAsync(ct);
         if (myId is null) return (false, "Could not determine your user ID.", null);
 
@@ -273,21 +303,50 @@ internal sealed class GraphPimDataService : IAsyncDisposable
 
     public async Task<bool?> CheckApprovalRequiredAsync(string roleDefId, CancellationToken ct)
     {
+        // Requires: RoleManagement.Read.Directory — read PIM policy to check if approval is needed
         try
         {
-            var token  = await GetGraphTokenAsync(ct);
             var filter = Uri.EscapeDataString(
                 $"scopeId eq '/' and scopeType eq 'DirectoryRole' and roleDefinitionId eq '{roleDefId}'");
             var assignmentUrl = $"{GraphBase}/policies/roleManagementPolicyAssignments" +
                                 $"?$filter={filter}&$select=policyId";
 
-            var assignResp = await GraphGetAsync<ODataCollection<PolicyAssignment>>(token, assignmentUrl, ct);
-            var policyId   = assignResp?.Value?.FirstOrDefault()?.PolicyId;
-            if (policyId is null) return null;
+            for (int attempt = 0; attempt < 2; attempt++)
+            {
+                var token = attempt == 0
+                    ? await GetGraphTokenAsync(ct)
+                    : await ForceRefreshGraphTokenAsync(ct);
 
-            var ruleUrl  = $"{GraphBase}/policies/roleManagementPolicies/{policyId}/rules/Approval_EndUser_Assignment";
-            var ruleResp = await GraphGetAsync<ApprovalRule>(token, ruleUrl, ct);
-            return ruleResp?.Setting?.IsApprovalRequired;
+                using var req = new HttpRequestMessage(HttpMethod.Get, assignmentUrl);
+                req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+                var resp = await _http.SendAsync(req, ct);
+
+                if (resp.StatusCode == System.Net.HttpStatusCode.Forbidden && attempt == 0)
+                {
+                    AppLog.Warning($"ApprovalCheck ({TenantDisplayName})",
+                        "Permission denied \u2014 forcing token refresh and retrying");
+                    continue;
+                }
+
+                if (!resp.IsSuccessStatusCode)
+                {
+                    var errBody = await resp.Content.ReadAsStringAsync(ct);
+                    AppLog.Warning($"ApprovalCheck ({TenantDisplayName})",
+                        $"HTTP {(int)resp.StatusCode}: {ExtractErrorMessage(errBody) ?? errBody}");
+                    return null;
+                }
+
+                var body = await resp.Content.ReadAsStringAsync(ct);
+                var assignResp = JsonSerializer.Deserialize<ODataCollection<PolicyAssignment>>(body, JsonOpts);
+                var policyId   = assignResp?.Value?.FirstOrDefault()?.PolicyId;
+                if (policyId is null) return null;
+
+                var ruleUrl  = $"{GraphBase}/policies/roleManagementPolicies/{policyId}/rules/Approval_EndUser_Assignment";
+                var ruleResp = await GraphGetAsync<ApprovalRule>(token, ruleUrl, ct);
+                return ruleResp?.Setting?.IsApprovalRequired;
+            }
+
+            return null;
         }
         catch (Exception ex)
         {
@@ -302,6 +361,7 @@ internal sealed class GraphPimDataService : IAsyncDisposable
 
     public async Task<string> PollActivationAsync(string pollUrl, CancellationToken ct)
     {
+        // Requires: RoleManagement.Read.Directory — poll activation request status
         var started = DateTimeOffset.UtcNow;
         var slowPhase = false;
 
@@ -349,6 +409,22 @@ internal sealed class GraphPimDataService : IAsyncDisposable
         var tr = await _credential.GetTokenAsync(
             new TokenRequestContext([GraphAudience]), ct);
         AppLog.Debug($"Auth ({TenantDisplayName})", $"Graph token acquired for {Email} (expires {tr.ExpiresOn:HH:mm:ss})");
+        return tr.Token;
+    }
+
+    /// <summary>
+    /// Forces MSAL to bypass the access token cache by passing a claims challenge,
+    /// acquiring a fresh token via the refresh token with updated scopes.
+    /// Note: passing claims: "{}" is an undocumented but widely-used MSAL behavior —
+    /// any non-null claims value causes MSAL to skip the access token cache and use
+    /// the refresh token to acquire a new access token with current consent grants.
+    /// </summary>
+    private async Task<string> ForceRefreshGraphTokenAsync(CancellationToken ct)
+    {
+        AppLog.Info($"Auth ({TenantDisplayName})", $"Force-refreshing Graph token for {Email}");
+        var tr = await _credential.GetTokenAsync(
+            new TokenRequestContext([GraphAudience], claims: "{}"), ct);
+        AppLog.Info($"Auth ({TenantDisplayName})", $"Fresh Graph token acquired for {Email} (expires {tr.ExpiresOn:HH:mm:ss})");
         return tr.Token;
     }
 

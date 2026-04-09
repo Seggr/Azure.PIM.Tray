@@ -71,6 +71,23 @@ internal static class WindowIconHelper
         w.Top  = workTop  + (workHeight - winH) / 2;
     }
 
+    /// <summary>
+    /// Forces a window to the foreground, even when the app doesn't have
+    /// activation rights (e.g. when called from a balloon notification click).
+    /// </summary>
+    public static void BringToForeground(Window w)
+    {
+        if (w.WindowState == WindowState.Minimized)
+            w.WindowState = WindowState.Normal;
+        w.Activate();
+        var hwnd = new WindowInteropHelper(w).Handle;
+        if (hwnd != IntPtr.Zero)
+            SetForegroundWindow(hwnd);
+    }
+
     [System.Runtime.InteropServices.DllImport("gdi32.dll")]
     private static extern bool DeleteObject(IntPtr hObject);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool SetForegroundWindow(IntPtr hWnd);
 }

@@ -91,6 +91,7 @@ internal sealed class ArmPimDataService : IAsyncDisposable
     public async Task<List<UnifiedEligibleRole>> GetArmEligibleRolesAsync(
         string myId, CancellationToken ct = default)
     {
+        // Requires: user_impersonation (ARM) — list eligible Azure RBAC roles across subscriptions
         var token  = await GetArmTokenAsync(ct);
         var subs   = await ListSubscriptionsAsync(token, ct);
         AppLog.Info($"ARM Eligible ({TenantDisplayName})",
@@ -210,6 +211,7 @@ internal sealed class ArmPimDataService : IAsyncDisposable
         UnifiedEligibleRole role, TimeSpan duration, string justification,
         string myId, CancellationToken ct)
     {
+        // Requires: user_impersonation (ARM) — submit Azure RBAC self-activation requests
         var token     = await GetArmTokenAsync(ct);
         var scope     = role.ArmScope ?? "unknown";
         var requestId = Guid.NewGuid().ToString();
@@ -257,6 +259,7 @@ internal sealed class ArmPimDataService : IAsyncDisposable
 
     public async Task<bool?> CheckApprovalRequiredAsync(string scope, string roleDefId, CancellationToken ct)
     {
+        // Requires: user_impersonation (ARM) — read ARM PIM policy to check if approval is needed
         try
         {
             var token  = await GetArmTokenAsync(ct);
@@ -287,6 +290,7 @@ internal sealed class ArmPimDataService : IAsyncDisposable
 
     public async Task<string> PollActivationAsync(string pollUrl, CancellationToken ct)
     {
+        // Requires: user_impersonation (ARM) — poll activation request status
         var started = DateTimeOffset.UtcNow;
         var slowPhase = false;
 

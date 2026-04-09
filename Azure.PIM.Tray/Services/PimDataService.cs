@@ -38,6 +38,10 @@ internal sealed class PimDataService : IAsyncDisposable
     public Task<string?> GetMyPrincipalIdAsync(CancellationToken ct = default)
         => _graph.GetMyPrincipalIdAsync(ct);
 
+    public Task<HashSet<string>> GetActiveRoleNamesAsync(
+        string myId, CancellationToken ct = default)
+        => _graph.GetActiveRoleNamesAsync(myId, ct);
+
     public Task<List<UnifiedEligibleRole>> GetEntraEligibleRolesAsync(
         string myId, CancellationToken ct = default)
         => _graph.GetEntraEligibleRolesAsync(myId, ct);
