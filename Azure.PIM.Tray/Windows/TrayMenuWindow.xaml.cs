@@ -22,6 +22,38 @@ public partial class TrayMenuWindow : Window
     private DispatcherTimer? _submenuDelay;
     private static readonly TimeSpan SubmenuOpenDelay = TimeSpan.FromMilliseconds(100);
 
+    // Submenu pool to avoid recreating WPF windows
+    private static readonly List<TrayMenuWindow> _pool = [];
+
+    internal static TrayMenuWindow GetOrCreate()
+    {
+        for (int i = 0; i < _pool.Count; i++)
+        {
+            var w = _pool[i];
+            if (!w.IsVisible)
+            {
+                w.Reset();
+                return w;
+            }
+        }
+        var fresh = new TrayMenuWindow();
+        _pool.Add(fresh);
+        return fresh;
+    }
+
+    /// <summary>Clears all items and resets state for reuse.</summary>
+    public void Reset()
+    {
+        CancelSubmenuDelay();
+        StopAutoScroll();
+        HideSubmenu();
+        MenuPanel.Children.Clear();
+        MenuScroll.ScrollToVerticalOffset(0);
+        MenuScroll.MaxHeight = double.PositiveInfinity;
+        _activeSubmenuItem = null;
+        _parentMenu = null;
+    }
+
     public TrayMenuWindow()
     {
         InitializeComponent();
@@ -182,7 +214,7 @@ public partial class TrayMenuWindow : Window
                 }
                 else
                 {
-                    CloseSubmenu();
+                    HideSubmenu();
                 }
             };
 
@@ -216,9 +248,9 @@ public partial class TrayMenuWindow : Window
         if (_activeSubmenuItem == item && _submenu is { IsVisible: true })
             return;
 
-        CloseSubmenu();
+        HideSubmenu();
 
-        var sub = new TrayMenuWindow();
+        var sub = GetOrCreate();
         sub._parentMenu = this;
         buildSubmenu(sub);
         _submenu = sub;
@@ -315,12 +347,12 @@ public partial class TrayMenuWindow : Window
         _submenuDelay = null;
     }
 
-    private void CloseSubmenu()
+    private void HideSubmenu()
     {
         if (_submenu is not null)
         {
-            _submenu.CloseSubmenu();
-            _submenu.Close();
+            _submenu.HideSubmenu();
+            _submenu.Hide();
             _submenu = null;
         }
         _activeSubmenuItem = null;
@@ -328,8 +360,8 @@ public partial class TrayMenuWindow : Window
 
     public void CloseAll()
     {
-        CloseSubmenu();
-        Close();
+        HideSubmenu();
+        Hide();
     }
 
     private void Window_Deactivated(object? sender, EventArgs e)

@@ -688,7 +688,18 @@ public partial class ManageWindow : Window
                 {
                     btn.Content = "Installing...";
                     var ok = await _feedService.InstallAsync(capturedExt);
-                    btn.Content = ok ? "Installed \u2014 restart to apply" : "Install failed";
+                    if (ok && _pluginLoader is not null)
+                    {
+                        var dllPath = System.IO.Path.Combine(
+                            PluginLoader.PluginsDir, $"{capturedExt.Id}.dll");
+                        await _pluginLoader.LoadAndInitializeAsync(dllPath);
+                        btn.Content = "\u2713 Installed";
+                        BuildInstalledExtensionsList();
+                    }
+                    else
+                    {
+                        btn.Content = ok ? "Installed \u2014 restart to apply" : "Install failed";
+                    }
                 }
             };
             btnPanel.Children.Add(btn);

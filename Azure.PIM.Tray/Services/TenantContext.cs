@@ -52,6 +52,12 @@ public sealed class TenantContext : ITenantContext
 
     public IReadOnlySet<string> ActiveRoleNames => _activeRoles;
 
+    public void MarkRoleActive(string roleName)
+    {
+        _activeRoles.Add(roleName);
+        DataChanged?.Invoke();
+    }
+
     public string LastRefreshStatus => _lastRefreshStatus;
 
     public TenantContext(TrayConnection connection, TokenCredential credential,
@@ -129,6 +135,18 @@ public sealed class TenantContext : ITenantContext
             }
 
             await Task.WhenAll(FetchEntraPending(), FetchArmPending());
+
+            // Refresh active roles (lightweight call, keeps menu status current)
+            try
+            {
+                var myId = await _svc.GetMyPrincipalIdAsync(ct);
+                if (myId is not null)
+                    _activeRoles = await _svc.GetActiveRoleNamesAsync(myId, ct);
+            }
+            catch (Exception ex)
+            {
+                AppLog.Debug($"Active Roles ({TenantDisplayName})", $"Refresh during pending poll failed: {ex.Message}");
+            }
 
             // Filter out requests made by the current user (can't self-approve)
             try
