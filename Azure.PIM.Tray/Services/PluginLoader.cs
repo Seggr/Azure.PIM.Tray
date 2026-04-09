@@ -16,7 +16,9 @@ public sealed class PluginLoader : IAsyncDisposable
     public IReadOnlyList<ITrayPlugin> Plugins => _plugins;
 
     public static string PluginsDir =>
-        Path.Combine(AppContext.BaseDirectory, "plugins");
+        Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "PimRequestManager", "plugins");
 
     /// <summary>
     /// Scans the plugins/ directory for DLLs containing <see cref="ITrayPlugin"/>
